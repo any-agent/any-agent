@@ -1,0 +1,11 @@
+.DS_Store
+*~
+tmp
+dist
+node_modules
+.bin
+.worktrees
+.env
+.idea
+.vscode
+
