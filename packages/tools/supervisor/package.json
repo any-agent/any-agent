@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "rm -r ./dist && bun build ./src/index.ts --outdir ./dist --target=bun && cp -r ./src/debug ./dist/debug",
-    "start": "bun run build && podman compose up -d --build",
-    "stop": "podman compose down",
+    "start": "bun run build && ./scripts/container-runtime.sh compose up -d --build",
+    "stop": "./scripts/container-runtime.sh compose down",
     "restart": "bun run stop && bun run start",
     "dev": "bun run src/index.ts",
     "test": "bun test",

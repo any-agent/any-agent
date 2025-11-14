@@ -28,15 +28,27 @@ The supervisor uses a plugin-based tool registry:
 
 ### Running the Supervisor
 
+**Development (local):**
 ```bash
 bun run src/index.ts
 ```
+
+**Production (containerized):**
+```bash
+bun run start    # Build and start containers
+bun run stop     # Stop containers
+bun run restart  # Restart containers
+```
+
+The npm/bun scripts automatically detect and use either Docker or Podman, whichever is installed. See `scripts/README.md` for details.
 
 ### Environment Configuration
 
 - Set `DOCKER_SOCKET_PATH` to point to your Docker/Podman socket
 - Set `DEBUG_UI=true` to enable the debug UI at `/debug` (optional)
 - Bun automatically loads .env files
+
+**Note:** The container runtime (Docker/Podman) is automatically detected by `scripts/container-runtime.sh`. No manual configuration needed.
 
 ### Registered Tools
 
