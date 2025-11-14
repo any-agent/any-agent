@@ -23,7 +23,6 @@ export class SeparateSSEChatTransport<UI_MESSAGE extends UIMessage>
     abortSignal,
     headers,
     body,
-    metadata,
   }: {
     trigger: 'submit-message' | 'regenerate-message';
     chatId: string;
@@ -104,8 +103,6 @@ export class SeparateSSEChatTransport<UI_MESSAGE extends UIMessage>
   async reconnectToStream({
     chatId,
     headers,
-    body,
-    metadata,
   }: {
     chatId: string;
   } & ChatRequestOptions): Promise<ReadableStream<UIMessageChunk> | null> {
