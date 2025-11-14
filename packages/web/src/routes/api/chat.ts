@@ -11,7 +11,7 @@ export const Route = createFileRoute('/api/chat')({
         try {
           const { messages } = await request.json()
 
-          const result = await streamText({
+          const result = streamText({
             model: openai('gpt-4o-mini'),
             messages: convertToModelMessages(messages),
             temperature: 0.7,
