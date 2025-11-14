@@ -8,7 +8,8 @@
   "packageManager": "bun@1.3.2",
   "workspaces": {
     "packages": [
-      "packages/*"
+      "packages/*",
+      "packages/tools/*"
     ],
     "catalog": {
       "@ai-sdk/anthropic": "^2.0.44",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@tsconfig/bun": "catalog:",
+    "@types/dockerode": "^3.3.45",
     "husky": "^9.1.7",
     "typescript": "catalog:"
   }
