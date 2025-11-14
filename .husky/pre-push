@@ -1,7 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-bun build || exit 1
-bun lint || exit 1
-bun test || exit 1
-
+bun run build || exit 1
+bun run lint || exit 1
+bun run test || exit 1
