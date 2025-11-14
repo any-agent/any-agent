@@ -8,7 +8,8 @@
     "build-full": "vite build",
     "build": "tsc --noEmit",
     "serve": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "biome lint"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
@@ -45,7 +46,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.4",
+    "@biomejs/biome": "catalog:",
     "@tanstack/devtools-event-client": "^0.3.2",
     "@tanstack/devtools-vite": "^0.3.11",
     "@testing-library/dom": "^10.4.0",

@@ -5,10 +5,14 @@
   "main": "index.js",
   "scripts": {
     "build": "echo \"No build step needed for core\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "biome lint"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "bun@1.3.2"
+  "packageManager": "bun@1.3.2",
+  "devDependencies": {
+    "@biomejs/biome": "catalog:"
+  }
 }

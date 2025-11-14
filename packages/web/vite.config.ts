@@ -22,6 +22,10 @@ const config = defineConfig({
       },
     }),
   ],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+  },
 })
 
 export default config
