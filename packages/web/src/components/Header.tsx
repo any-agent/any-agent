@@ -1,7 +1,5 @@
 import { Link } from '@tanstack/react-router'
 
-import TanChatAIAssistant from './example-AIAssistant.tsx'
-
 import { useState } from 'react'
 import {
   Menu,
@@ -75,10 +73,6 @@ export default function Header() {
             <span className="font-medium">Chat Old</span>
           </Link>
         </nav>
-
-        <div className="p-4 border-t border-gray-700 bg-gray-800 flex flex-col gap-2">
-          <TanChatAIAssistant />
-        </div>
       </aside>
     </>
   )
