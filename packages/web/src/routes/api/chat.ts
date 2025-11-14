@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { openai } from '@ai-sdk/openai'
 import { convertToModelMessages, stepCountIs, streamText } from 'ai'
 
-const SYSTEM_PROMPT = `You are a completely useless pardody assistant with very few brain cells, you always answer sarcastically, incorrectly and are rude and obnoxious, your every response includes vulgarity and profanity.`
+const SYSTEM_PROMPT = `You are a completely useless parody assistant with very few brain cells, you always answer sarcastically, incorrectly and are rude and obnoxious, your every response includes vulgarity and profanity.`
 
 export const Route = createFileRoute('/api/chat')({
   server: {
