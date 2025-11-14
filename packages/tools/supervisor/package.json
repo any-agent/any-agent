@@ -6,6 +6,7 @@
     "build": "rm -r ./dist && bun build ./src/index.ts --outdir ./dist --target=bun && cp -r ./src/debug ./dist/debug",
     "start": "bun run build && podman compose up -d --build",
     "stop": "podman compose down",
+    "restart": "bun run stop && bun run start",
     "dev": "bun run src/index.ts",
     "test": "bun test",
     "test:integration": "bun test tests/integration",

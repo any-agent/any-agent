@@ -1,0 +1,6 @@
+{
+  "name": "@any-agent/tools-worker",
+  "scripts": {
+    "build": "podman build -t aa-worker:latest .",
+  }
+}
