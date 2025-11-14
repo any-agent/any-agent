@@ -3,10 +3,9 @@ import type {
 	ToolHandler,
 	ToolExecutionContext,
 	ToolExecutionResult,
-} from "../core/tool-handler.js";
+} from "./tool-handler.js";
 import type { CodeExecutionInput } from "@any-agent/core/schemas";
 import { writeWorkspaceFile } from "@any-agent/core/storage";
-import path from "path";
 
 /**
  * Tool handler for executing code in isolated containers
@@ -14,7 +13,7 @@ import path from "path";
 export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 	readonly toolType = "code_execution";
 
-	constructor(private docker: Docker) {}
+	constructor(private docker: Docker) { }
 
 	async execute(
 		input: CodeExecutionInput,

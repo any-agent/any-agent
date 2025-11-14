@@ -1,4 +1,3 @@
-// server.js
 import Fastify from "fastify";
 import Docker from "dockerode";
 import path from "path";
@@ -6,12 +5,8 @@ import { nanoid } from "nanoid";
 import process from "node:process";
 import {
 	ToolRequestSchema,
-	ToolResponseSchema,
 	RunRequestSchema,
-	RunResponseSchema,
-	type ToolRequest,
 	type ToolResponse,
-	type RunRequest,
 	type RunResponse,
 } from "@any-agent/core/schemas";
 import {
@@ -20,7 +15,7 @@ import {
 	listWorkspaceFiles,
 	categorizeArtifacts,
 } from "@any-agent/core/storage";
-import { ToolRegistry } from "./core/tool-handler.js";
+import { ToolRegistry } from "./tools/tool-handler.js";
 import { CodeExecutionTool } from "./tools/code-execution.js";
 import { DocumentConverterTool } from "./tools/document-converter.js";
 

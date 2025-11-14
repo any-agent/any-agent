@@ -3,7 +3,7 @@
   "module": "src/index.ts",
   "type": "module",
   "scripts": {
-    "build": "rm -r ./dist && bun build ./src/index.ts --outdir ./dist --target=bun && cp -r ./src/debug ./dist/debug",
+    "build": "tsc && rm -r ./dist && bun build ./src/index.ts --outdir ./dist --target=bun && cp -r ./src/debug ./dist/debug",
     "start": "bun run build && container-runtime compose up -d --build",
     "stop": "container-runtime compose down",
     "restart": "bun run stop && bun run start",

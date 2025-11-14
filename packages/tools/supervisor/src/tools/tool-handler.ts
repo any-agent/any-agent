@@ -1,4 +1,4 @@
-import type { ToolRequest } from "./schemas.js";
+import type { ToolRequest } from "@any-agent/core/schemas";
 
 /**
  * Context information passed to tool handlers

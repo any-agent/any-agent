@@ -3,7 +3,7 @@ import type {
 	ToolHandler,
 	ToolExecutionContext,
 	ToolExecutionResult,
-} from "../core/tool-handler.js";
+} from "./tool-handler.js";
 import type { DocumentConverterInput } from "@any-agent/core/schemas";
 import { writeWorkspaceFile } from "@any-agent/core/storage";
 
@@ -14,7 +14,7 @@ import { writeWorkspaceFile } from "@any-agent/core/storage";
 export class DocumentConverterTool implements ToolHandler<DocumentConverterInput> {
 	readonly toolType = "document_converter";
 
-	constructor(private docker: Docker) {}
+	constructor(private docker: Docker) { }
 
 	async execute(
 		input: DocumentConverterInput,
