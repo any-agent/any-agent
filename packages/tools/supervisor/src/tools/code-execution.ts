@@ -49,8 +49,8 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 		});
 
 		// Capture stdout/stderr
-		const stdoutChunks: string[] = [];
-		const stderrChunks: string[] = [];
+		const stdoutChunks: Buffer[] = [];
+		const stderrChunks: Buffer[] = [];
 
 		const stream = await container.attach({
 			stream: true,
@@ -58,11 +58,14 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 			stderr: true,
 		});
 
-		// Docker multiplexes stdout/stderr in the stream
-		stream.on("data", (chunk) => {
-			const str = chunk.toString();
-			// TODO: Properly demux stdout/stderr
-			stdoutChunks.push(str);
+		// Docker multiplexes stdout/stderr in the stream using the following format:
+		// Header (8 bytes):
+		//   - Byte 0: Stream type (0=stdin, 1=stdout, 2=stderr)
+		//   - Bytes 1-3: Reserved
+		//   - Bytes 4-7: Frame size (big-endian uint32)
+		// Payload: The actual data
+		stream.on("data", (chunk: Buffer) => {
+			this.demuxDockerStream(chunk, stdoutChunks, stderrChunks);
 		});
 
 		await container.start();
@@ -71,13 +74,60 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 		const exitCode = result.StatusCode;
 
 		// Write stdout and stderr to files
-		const stdoutContent = stdoutChunks.join("");
+		const stdoutContent = Buffer.concat(stdoutChunks).toString("utf-8");
 		await writeWorkspaceFile(workDir, "stdout", stdoutContent);
 
-		const stderrContent = stderrChunks.join("");
+		const stderrContent = Buffer.concat(stderrChunks).toString("utf-8");
 		await writeWorkspaceFile(workDir, "stderr", stderrContent);
 
 		return { exitCode, inputFiles };
+	}
+
+	/**
+	 * Demultiplex Docker stream data into stdout and stderr buffers
+	 * Docker stream format:
+	 *   - Byte 0: Stream type (1=stdout, 2=stderr)
+	 *   - Bytes 1-3: Reserved
+	 *   - Bytes 4-7: Frame size (big-endian uint32)
+	 *   - Bytes 8+: Payload data
+	 */
+	private demuxDockerStream(
+		chunk: Buffer,
+		stdoutChunks: Buffer[],
+		stderrChunks: Buffer[]
+	): void {
+		let offset = 0;
+
+		while (offset < chunk.length) {
+			// Need at least 8 bytes for the header
+			if (offset + 8 > chunk.length) {
+				break;
+			}
+
+			const streamType = chunk.readUInt8(offset);
+			const payloadSize = chunk.readUInt32BE(offset + 4);
+
+			// Ensure we have the full payload
+			if (offset + 8 + payloadSize > chunk.length) {
+				break;
+			}
+
+			const payload = chunk.subarray(offset + 8, offset + 8 + payloadSize);
+
+			// Route to appropriate stream based on type
+			switch (streamType) {
+				case 1: // stdout
+					stdoutChunks.push(payload);
+					break;
+				case 2: // stderr
+					stderrChunks.push(payload);
+					break;
+				// case 0: stdin (shouldn't happen in attach mode)
+				// case 3: systemerr (rare)
+			}
+
+			offset += 8 + payloadSize;
+		}
 	}
 
 	private getRunCommand(
