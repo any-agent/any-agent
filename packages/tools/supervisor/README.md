@@ -1,18 +1,25 @@
-# Code Execution Supervisor
+# Tool Execution Supervisor
 
-A secure code execution supervisor that spawns Docker/Podman containers to run code in isolated Ubuntu Linux environments.
+A general-purpose tool execution supervisor that spawns Docker/Podman containers to run tools in isolated environments.
 
 ## Overview
 
-This supervisor provides an API for executing code in various languages (Python, Node.js, Bun, Bash) within containerized environments. It manages the container lifecycle, handles input/output artifacts, and provides secure isolation for code execution.
+This supervisor provides an extensible API for executing various tools within containerized environments. It manages the container lifecycle, handles input/output artifacts, and provides secure isolation for tool execution.
+
+### Available Tools
+
+- **code_execution**: Execute code in various languages (Python, Node.js, Bun, Bash)
+- More tools can be added through the plugin system
 
 ## Features
 
-- **Multi-language Support**: Execute Python, Node.js, Bun, and Bash code
+- **Extensible Tool System**: Plugin-based architecture for adding new tools
+- **Code Execution Tool**: Built-in support for Python, Node.js, Bun, and Bash
 - **Secure Isolation**: Network disabled, memory limits (512MB), PID limits (128), CPU quotas (50%)
-- **Artifact Management**: Automatic mounting of input/output files between host and container
-- **Stream Handling**: Captures and returns stdout/stderr from container execution
+- **Artifact Management**: Automatic handling of input/output files with download URLs
+- **Stream Handling**: Captures stdout/stderr as downloadable artifacts
 - **Docker/Podman Compatible**: Works with both Docker and Podman through dockerode
+- **Session Management**: Organize jobs by sessionId for multi-job workflows
 
 ## Installation
 
@@ -41,15 +48,16 @@ The API will be available at `http://localhost:8080`
 
 ## API Endpoints
 
-### POST /run
+### POST /tools/execute
 
-Execute code in a containerized environment.
+Execute any registered tool.
 
 **Request Body:**
 ```json
 {
+  "tool": "code_execution",
   "sessionId": "session-xyz",
-  "language": "python|node|bun|bash",
+  "language": "python",
   "code": "print('Hello, World!')",
   "filename": "script.py"
 }
@@ -58,6 +66,7 @@ Execute code in a containerized environment.
 **Response:**
 ```json
 {
+  "tool": "code_execution",
   "sessionId": "session-xyz",
   "id": "abc123",
   "exitCode": 0,
@@ -75,6 +84,10 @@ Execute code in a containerized environment.
 ```
 
 **Note:** stdout and stderr are written as artifact files in the job directory, not returned in the response body.
+
+### POST /run (Legacy)
+
+Legacy endpoint for code execution (backward compatibility). Same as `/tools/execute` with `tool: "code_execution"`, but doesn't require the `tool` field.
 
 ### GET /artifacts/:sessionId/:jobId/:filename
 
@@ -102,17 +115,28 @@ Interactive debug UI for testing the supervisor. Access at `http://localhost:808
 
 ## How It Works
 
-1. Receives code execution request via API with sessionId
-2. Creates a temporary workspace directory in `~/.aa-storage/{sessionId}/job-{id}`
-3. Writes code to file in the workspace (tracked as input artifact)
-4. Spawns a Docker/Podman container with the `aa-worker:latest` image
-5. Mounts the workspace directory to `/workspace` in the container
-6. Executes the code with appropriate runtime (python3, node, bun, or bash)
-7. Captures stdout/stderr streams and writes them to `stdout` and `stderr` files in the workspace
-8. Scans workspace to identify input vs output artifacts
-9. Returns execution results with:
-   - Exit code
-   - Input artifacts (original script files) with download URLs
+1. Receives tool execution request via API with tool type and sessionId
+2. Looks up the appropriate tool handler from the registry
+3. Creates a temporary workspace directory in `~/.aa-storage/{sessionId}/job-{id}`
+4. Tool handler executes its logic (e.g., for code execution):
+   - Writes input files to the workspace
+   - Spawns a Docker/Podman container with the appropriate image
+   - Mounts the workspace directory to `/workspace` in the container
+   - Executes the tool within the isolated container
+   - Captures stdout/stderr streams and writes them to artifact files
+5. Scans workspace to identify input vs output artifacts
+6. Returns execution results with:
+   - Tool type and exit code
+   - Input artifacts (original files) with download URLs
    - Output artifacts (stdout, stderr, and any generated files) with download URLs
-10. Auto-removes container after execution
-11. All artifacts remain available for download via the artifacts endpoint
+7. Auto-removes container after execution
+8. All artifacts remain available for download via the artifacts endpoint
+
+## Adding New Tools
+
+To add a new tool:
+
+1. Create a new tool handler implementing the `ToolHandler` interface in `src/tools/`
+2. Register the tool in `src/index.ts` with `toolRegistry.register()`
+3. Add the tool's input schema to `src/core/schemas.ts`
+4. The tool will automatically be available via `/tools/execute`
