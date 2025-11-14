@@ -2,6 +2,11 @@
   "name": "@any-agent/tools-supervisor",
   "module": "src/index.ts",
   "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "test:integration": "bun test tests/integration",
+    "test:watch": "bun test --watch"
+  },
   "devDependencies": {
     "@types/bun": "catalog:"
   },
