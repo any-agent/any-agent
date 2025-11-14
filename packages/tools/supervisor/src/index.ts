@@ -7,6 +7,31 @@ import { mkdir, chmod } from "fs/promises";
 import { nanoid } from "nanoid";
 import process from "node:process";
 import os from "node:os";
+import { z } from "zod";
+
+// Zod schemas for request/response validation
+const RunRequestSchema = z.object({
+	sessionId: z.string().min(1, "Session ID must not be empty"),
+	language: z.enum(["python", "node", "bun", "bash"]).default("bash"),
+	code: z.string().min(1, "Code must not be empty"),
+	filename: z.string().default("script.js"),
+});
+
+const ArtifactSchema = z.record(z.string(), z.string()); // { filename: url }
+
+const RunResponseSchema = z.object({
+	sessionId: z.string(),
+	id: z.string(),
+	exitCode: z.number(),
+	output: z.string(),
+	artifacts: z.object({
+		inputs: ArtifactSchema,
+		outputs: ArtifactSchema,
+	}),
+});
+
+type RunRequest = z.infer<typeof RunRequestSchema>;
+type RunResponse = z.infer<typeof RunResponseSchema>;
 
 const docker = new Docker({
 	// socketPath: path.join(os.homedir(), "podman/podman.sock"),
@@ -21,22 +46,64 @@ docker.version().then(console.log).catch((e) => {
 // Fastify server instance
 const fastify = Fastify({ logger: true });
 
+// GET /artifacts/:sessionId/:jobId/:filename - Download artifact
+fastify.get("/artifacts/:sessionId/:jobId/:filename", async (request, reply) => {
+	const { sessionId, jobId, filename } = request.params as {
+		sessionId: string;
+		jobId: string;
+		filename: string;
+	};
+
+	const baseDir = path.join(os.homedir(), ".aa-storage");
+	const artifactPath = path.join(baseDir, sessionId, `job-${jobId}`, filename);
+
+	// Send file or 404 if not found
+	try {
+		const file = Bun.file(artifactPath);
+		const exists = await file.exists();
+
+		if (!exists) {
+			reply.code(404).send({ error: "Artifact not found" });
+			return;
+		}
+
+		reply.type(file.type || "application/octet-stream");
+		const bytes = await file.bytes();
+		reply.send(Buffer.from(bytes));
+	} catch (err) {
+		fastify.log.error(err);
+		reply.code(500).send({ error: "Failed to read artifact" });
+	}
+});
+
 fastify.post("/run", async (request, reply) => {
-	const { language, code, filename = "script.js" } = request.body || {};
-	if (!code) {
-		reply.code(400).send({ error: "Missing 'code' field in body" });
+	// Validate request body
+	console.log(request.body)
+	const parseResult = RunRequestSchema.safeParse(request.body);
+
+	if (!parseResult.success) {
+		reply.code(400).send({
+			error: "Invalid request body",
+			details: parseResult.error.issues
+		});
 		return;
 	}
 
+	const { sessionId, language, code, filename } = parseResult.data;
+
 	const id = nanoid(6);
 	const baseDir = path.join(os.homedir(), ".aa-storage");
-	const workDir = path.join(baseDir, `job-${id}`);
+	const sessionDir = path.join(baseDir, sessionId);
+	const workDir = path.join(sessionDir, `job-${id}`);
 	console.log("processing job: ", workDir)
 	await mkdir(workDir, { recursive: true });
 	await chmod(workDir, 0o755);
 
 	const scriptPath = path.join(workDir, filename);
 	await writeFile(scriptPath, code);
+
+	// Track input files
+	const inputFiles = new Set([filename]);
 
 	const command = getRunCommand(language, filename);
 
@@ -56,7 +123,7 @@ fastify.post("/run", async (request, reply) => {
 		},
 	});
 
-	const logs = [];
+	const logs: string[] = [];
 	const stream = await container.attach({
 		stream: true,
 		stdout: true,
@@ -70,23 +137,49 @@ fastify.post("/run", async (request, reply) => {
 	const exitCode = result.StatusCode;
 	const combinedOutput = logs.join("");
 
-	// Gather artifacts (filenames only)
-	let artifacts = [];
+	// Gather all files in workspace
+	let allFiles: string[] = [];
 	try {
-		artifacts = await readdir(workDir);
+		allFiles = await readdir(workDir);
 	} catch (err) {
 		fastify.log.error(err);
 	}
 
-	reply.send({
+	// Helper function to generate artifact URL
+	const getArtifactUrl = (filename: string) => {
+		const host = request.headers.host || "localhost:8080";
+		const protocol = request.protocol || "http";
+		return `${protocol}://${host}/artifacts/${sessionId}/${id}/${filename}`;
+	};
+
+	// Separate inputs and outputs
+	const inputArtifacts: Record<string, string> = {};
+	const outputArtifacts: Record<string, string> = {};
+
+	for (const file of allFiles) {
+		const url = getArtifactUrl(file);
+		if (inputFiles.has(file)) {
+			inputArtifacts[file] = url;
+		} else {
+			outputArtifacts[file] = url;
+		}
+	}
+
+	const response: RunResponse = {
+		sessionId,
 		id,
 		exitCode,
 		output: combinedOutput,
-		artifacts,
-	});
+		artifacts: {
+			inputs: inputArtifacts,
+			outputs: outputArtifacts,
+		},
+	};
+
+	reply.send(response);
 });
 
-function getRunCommand(lang, file) {
+function getRunCommand(lang: RunRequest["language"], file: string): string {
 	switch (lang) {
 		case "python":
 			return `python3 ${file}`;
@@ -95,7 +188,6 @@ function getRunCommand(lang, file) {
 		case "bun":
 			return `bun run ${file}`;
 		case "bash":
-		default:
 			return `bash ${file}`;
 	}
 }
