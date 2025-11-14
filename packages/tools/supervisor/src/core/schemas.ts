@@ -6,6 +6,13 @@ export const ArtifactSchema = z.record(z.string(), z.string()); // { filename: u
 // Base tool request schema
 const BaseToolRequestSchema = z.object({
 	sessionId: z.string().min(1, "Session ID must not be empty"),
+	timeout: z
+		.number()
+		.int()
+		.min(1, "Timeout must be at least 1 second")
+		.max(900, "Timeout cannot exceed 900 seconds (15 minutes)")
+		.default(30)
+		.describe("Execution timeout in seconds (default: 30s, max: 900s)"),
 });
 
 // Code execution tool schemas

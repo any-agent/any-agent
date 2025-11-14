@@ -62,6 +62,9 @@
 				<label for="filename">Filename</label>
 				<input type="text" id="filename" x-model="filename" placeholder="e.g., script.py" required>
 
+				<label for="timeout">Timeout (seconds, max: 900)</label>
+				<input type="number" id="timeout" x-model.number="timeout" placeholder="30" min="1" max="900" required>
+
 				<label for="code">Code</label>
 				<textarea id="code" x-model="code" placeholder="Enter your code here..." required></textarea>
 
@@ -153,6 +156,7 @@
 				sessionId: 'debug-session-' + Date.now(),
 				language: 'python',
 				filename: 'script.py',
+				timeout: 30,
 				code: 'print("Hello from the supervisor!")',
 				loading: false,
 				result: null,
@@ -175,7 +179,8 @@
 						sessionId: this.sessionId,
 						language: this.language,
 						code: this.code,
-						filename: this.filename
+						filename: this.filename,
+						timeout: this.timeout
 					};
 
 					// Store raw input

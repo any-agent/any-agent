@@ -14,6 +14,7 @@ async function executeCode(params: {
 	language: string;
 	code: string;
 	filename: string;
+	timeout?: number;
 }) {
 	const response = await fetch(`${ENDPOINT}/run`, {
 		method: "POST",
@@ -385,6 +386,62 @@ echo "file content" > data.txt`;
 
 			const stderr = await downloadArtifact(result.artifacts.outputs.stderr!);
 			expect(stderr).toBe("");
+		});
+	});
+
+	describe("Timeout", () => {
+		test("execution times out after specified duration", async () => {
+			const sessionId = getSessionId();
+			const response = await fetch(`${ENDPOINT}/run`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					sessionId,
+					language: "python",
+					code: "import time\ntime.sleep(2)",
+					filename: "test.py",
+					timeout: 1, // 1 second timeout
+				}),
+			});
+
+			expect(response.ok).toBe(true);
+			const data = await response.json();
+			const validated = RunResponseSchema.parse(data);
+
+			// Should have exit code -1 for timeout
+			expect(validated.exitCode).toBe(-1);
+			expect(validated.artifacts.outputs.stderr).toBeDefined();
+
+			// Verify timeout message in stderr
+			const stderr = await downloadArtifact(validated.artifacts.outputs.stderr!);
+			expect(stderr).toContain("Execution timed out");
+			expect(stderr).toContain("timeout was set to 1s");
+			expect(stderr).toMatch(/after \d+\.\d+s/); // Check elapsed time format
+		});
+
+		test("execution completes within timeout", async () => {
+			const sessionId = getSessionId();
+			const response = await fetch(`${ENDPOINT}/run`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					sessionId,
+					language: "python",
+					code: 'print("fast execution")',
+					filename: "test.py",
+					timeout: 10, // 10 second timeout (plenty of time)
+				}),
+			});
+
+			expect(response.ok).toBe(true);
+			const data = await response.json();
+			const result = RunResponseSchema.parse(data);
+
+			// Should complete successfully
+			expect(result.exitCode).toBe(0);
+
+			const stdout = await downloadArtifact(result.artifacts.outputs.stdout!);
+			expect(stdout.trim()).toBe("fast execution");
 		});
 	});
 });

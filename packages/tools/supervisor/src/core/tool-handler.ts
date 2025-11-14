@@ -9,6 +9,7 @@ export interface ToolExecutionContext {
 	workDir: string;
 	protocol: string;
 	host: string;
+	timeout: number; // Timeout in seconds
 }
 
 /**

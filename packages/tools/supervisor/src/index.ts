@@ -115,6 +115,7 @@ fastify.post("/tools/execute", async (request, reply) => {
 			workDir,
 			protocol: request.protocol || "http",
 			host: request.headers.host || "localhost:8080",
+			timeout: toolRequest.timeout,
 		};
 
 		const result = await handler.execute(toolRequest, context);
@@ -197,7 +198,7 @@ fastify.post("/run", async (request, reply) => {
 		return;
 	}
 
-	const { sessionId, language, code, filename } = parseResult.data;
+	const { sessionId, language, code, filename, timeout } = parseResult.data;
 
 	// Convert to tool request format
 	const toolRequest = {
@@ -206,6 +207,7 @@ fastify.post("/run", async (request, reply) => {
 		language,
 		code,
 		filename,
+		timeout,
 	};
 
 	const handler = toolRegistry.get("code_execution");
@@ -225,6 +227,7 @@ fastify.post("/run", async (request, reply) => {
 			workDir,
 			protocol: request.protocol || "http",
 			host: request.headers.host || "localhost:8080",
+			timeout,
 		};
 
 		const result = await handler.execute(toolRequest, context);

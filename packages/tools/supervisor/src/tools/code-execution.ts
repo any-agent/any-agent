@@ -21,7 +21,7 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 		context: ToolExecutionContext
 	): Promise<ToolExecutionResult> {
 		const { language, code, filename } = input;
-		const { workDir } = context;
+		const { workDir, timeout } = context;
 
 		// Write the code file to workspace
 		await writeWorkspaceFile(workDir, filename, code);
@@ -68,10 +68,42 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 			this.demuxDockerStream(chunk, stdoutChunks, stderrChunks);
 		});
 
+		const startTime = Date.now();
 		await container.start();
-		const result = await container.wait();
 
-		const exitCode = result.StatusCode;
+		// Race between container completion and timeout
+		let exitCode: number;
+		let timedOut = false;
+
+		try {
+			const result = await Promise.race([
+				container.wait(),
+				new Promise<never>((_, reject) =>
+					setTimeout(() => reject(new Error("TIMEOUT")), timeout * 1000)
+				),
+			]);
+			exitCode = result.StatusCode;
+		} catch (error) {
+			if (error instanceof Error && error.message === "TIMEOUT") {
+				timedOut = true;
+				exitCode = -1;
+				const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+				// Kill the container
+				try {
+					await container.kill();
+				} catch (killError) {
+					// Container might already be stopped
+					console.error("Error killing container:", killError);
+				}
+
+				// Append timeout message to stderr
+				const timeoutMessage = `\nExecution timed out after ${elapsedTime}s (timeout was set to ${timeout}s)\n`;
+				stderrChunks.push(Buffer.from(timeoutMessage, "utf-8"));
+			} else {
+				throw error;
+			}
+		}
 
 		// Write stdout and stderr to files
 		const stdoutContent = Buffer.concat(stdoutChunks).toString("utf-8");
