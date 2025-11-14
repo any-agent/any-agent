@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Tool Supervisor - Debug</title>
+	<style>
+		* { box-sizing: border-box; }
+		body {
+			font-family: system-ui, -apple-system, sans-serif;
+			max-width: 800px;
+			margin: 0 auto;
+			padding: 40px 20px;
+			background: #f5f5f5;
+		}
+		h1 {
+			color: #333;
+			text-align: center;
+			margin-bottom: 10px;
+		}
+		.subtitle {
+			text-align: center;
+			color: #666;
+			margin-bottom: 40px;
+			font-size: 16px;
+		}
+		.tools-grid {
+			display: grid;
+			gap: 20px;
+			grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+		}
+		.tool-card {
+			background: white;
+			padding: 24px;
+			border-radius: 8px;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			text-decoration: none;
+			color: inherit;
+			transition: all 0.2s;
+			border: 2px solid transparent;
+		}
+		.tool-card:hover {
+			box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+			transform: translateY(-2px);
+			border-color: #007bff;
+		}
+		.tool-icon {
+			font-size: 32px;
+			margin-bottom: 12px;
+		}
+		.tool-name {
+			font-size: 18px;
+			font-weight: 600;
+			color: #333;
+			margin-bottom: 8px;
+		}
+		.tool-description {
+			font-size: 14px;
+			color: #666;
+			line-height: 1.5;
+		}
+		.footer {
+			text-align: center;
+			margin-top: 40px;
+			color: #999;
+			font-size: 14px;
+		}
+	</style>
+</head>
+<body>
+	<h1>🔧 Tool Supervisor - Debug Interface</h1>
+	<p class="subtitle">Select a tool to test and debug</p>
+
+	<div class="tools-grid">
+		<a href="/debug/code-execution" class="tool-card">
+			<div class="tool-icon">💻</div>
+			<div class="tool-name">Code Execution</div>
+			<div class="tool-description">
+				Execute code in isolated containers. Supports Python, Node.js, Bun, and Bash.
+			</div>
+		</a>
+
+		<!-- Add more tool cards here as new tools are registered -->
+		<!-- Example:
+		<a href="/debug/your-tool" class="tool-card">
+			<div class="tool-icon">🔨</div>
+			<div class="tool-name">Your Tool</div>
+			<div class="tool-description">
+				Description of your tool
+			</div>
+		</a>
+		-->
+	</div>
+
+	<div class="footer">
+		Debug UI only available when DEBUG_UI=true
+	</div>
+</body>
+</html>

@@ -102,16 +102,24 @@ Download an artifact file from a completed job.
 
 ### GET /debug
 
-Interactive debug UI for testing the supervisor. Access at `http://localhost:8080/debug`
+Debug UI landing page listing all available tools. Access at `http://localhost:8080/debug`
 
-**Note:** This endpoint is only available when `DEBUG_UI=true` is set in the environment.
+**Note:** Debug UI is only available when `DEBUG_UI=true` is set in the environment.
+
+### GET /debug/:toolName
+
+Tool-specific debug UI for testing individual tools.
+
+**Available Debug UIs:**
+- `/debug/code-execution` - Code execution tool debugger
 
 **Features:**
-- Form inputs for sessionId, language, code, and filename
-- Execute code and view results
+- Interactive forms for tool-specific inputs
+- Execute tools and view results in real-time
 - Display input and output artifacts with download links
 - Inline viewer for stdout/stderr content
 - Error handling and validation feedback
+- Navigation back to debug landing page
 
 ## How It Works
 

@@ -73,10 +73,15 @@ Containers are configured with:
 - Returns appropriate Content-Type headers
 
 **GET /debug** (only when `DEBUG_UI=true`)
-- Interactive HTML debug UI for testing the supervisor
-- Loaded from `src/debug.html` file
+- Landing page listing all available tool debuggers
+- Loaded from `src/debug/index.html`
+- Provides links to tool-specific debug UIs
+
+**GET /debug/:toolName** (only when `DEBUG_UI=true`)
+- Tool-specific debug UI (e.g., `/debug/code-execution`)
+- Loaded from `src/debug/{toolName}.html`
+- Interactive forms for testing tool execution
 - Uses Alpine.js for reactivity (no build step required)
-- Allows testing tool execution with immediate feedback
 - Displays artifacts with inline viewing for stdout/stderr
 
 ### Code Organization
@@ -92,7 +97,9 @@ Containers are configured with:
 - Add new tools here implementing the `ToolHandler` interface
 
 **UI:**
-- `src/debug.html` - Debug UI (only served when `DEBUG_UI=true`)
+- `src/debug/index.html` - Debug landing page listing all tools
+- `src/debug/code-execution.html` - Code execution debug UI
+- Add new tool debug UIs as `src/debug/{tool-name}.html`
 
 **Storage:**
 - Workspaces organized as `~/.aa-storage/{sessionId}/job-{id}`
@@ -126,6 +133,11 @@ export const YourToolInputSchema = BaseToolRequestSchema.extend({
 ```ts
 toolRegistry.register(new YourTool(docker));
 ```
+
+4. (Optional) Create debug UI at `src/debug/your-tool.html`:
+- Copy and modify `src/debug/code-execution.html` as a template
+- Update the form inputs to match your tool's schema
+- Add a link in `src/debug/index.html` to your new debug page
 
 ### Testing
 

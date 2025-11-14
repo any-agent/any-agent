@@ -42,14 +42,38 @@ console.log("Registered tools:", toolRegistry.getToolTypes().join(", "));
 // Fastify server instance
 const fastify = Fastify({ logger: true });
 
-// GET /debug - Debug UI for testing the supervisor (only if DEBUG_UI env var is set)
+// Debug UI routes (only if DEBUG_UI env var is set)
 if (process.env.DEBUG_UI === "true") {
+	// GET /debug - Debug landing page listing all tools
 	fastify.get("/debug", async (request, reply) => {
-		const debugHtmlPath = path.join(import.meta.dir, "debug.html");
-		const debugHtml = await Bun.file(debugHtmlPath).text();
-		reply.type("text/html").send(debugHtml);
+		const debugIndexPath = path.join(import.meta.dir, "debug", "index.html");
+		const debugIndexHtml = await Bun.file(debugIndexPath).text();
+		reply.type("text/html").send(debugIndexHtml);
 	});
-	console.log("Debug UI enabled at /debug");
+
+	// GET /debug/:toolName - Tool-specific debug UI
+	fastify.get("/debug/:toolName", async (request, reply) => {
+		const { toolName } = request.params as { toolName: string };
+		const debugToolPath = path.join(import.meta.dir, "debug", `${toolName}.html`);
+
+		const debugToolFile = Bun.file(debugToolPath);
+		const exists = await debugToolFile.exists();
+
+		if (!exists) {
+			reply.code(404).send({
+				error: "Debug UI not found for this tool",
+				availableTools: toolRegistry.getToolTypes()
+			});
+			return;
+		}
+
+		const debugToolHtml = await debugToolFile.text();
+		reply.type("text/html").send(debugToolHtml);
+	});
+
+	console.log("Debug UI enabled:");
+	console.log("  - Landing page: /debug");
+	console.log("  - Code execution: /debug/code-execution");
 }
 
 // POST /tools/execute - Execute any registered tool

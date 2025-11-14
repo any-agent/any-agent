@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Code Execution Supervisor - Debug</title>
+	<title>Code Execution Tool - Debug</title>
 	<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 	<style>
 		* { box-sizing: border-box; }
@@ -29,10 +29,20 @@
 		.loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
 		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 		h3 { margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+		.empty-content { color: #dc3545; font-style: italic; padding: 15px; background: #f8f9fa; border-radius: 4px; border: 1px solid #ddd; }
+		.json-display { background: #282c34; color: #abb2bf; padding: 15px; border-radius: 4px; overflow-x: auto; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; line-height: 1.5; max-height: 400px; overflow-y: auto; }
+		.json-key { color: #e06c75; }
+		.json-string { color: #98c379; }
+		.json-number { color: #d19a66; }
+		.json-boolean { color: #56b6c2; }
+		.json-null { color: #c678dd; }
 	</style>
 </head>
 <body x-data="debugApp()">
-	<h1>🔧 Code Execution Supervisor - Debug</h1>
+	<h1>💻 Code Execution Tool - Debug</h1>
+	<p style="text-align: center; color: #666; margin-top: -10px; margin-bottom: 30px;">
+		<a href="/debug" style="color: #007bff; text-decoration: none;">← Back to tools</a>
+	</p>
 
 	<div class="container">
 		<div class="panel">
@@ -102,14 +112,37 @@
 					</ul>
 				</div>
 
-				<div x-show="artifactContent">
+				<div x-show="artifactName">
 					<h4 style="margin-top: 20px;" x-text="'Content: ' + artifactName"></h4>
-					<pre x-text="artifactContent"></pre>
+					<pre x-show="artifactContent && !isEmptyContent" x-text="artifactContent"></pre>
+					<div x-show="isEmptyContent" class="empty-content">no content</div>
 				</div>
 			</div>
 
 			<div x-show="!result && !error && !loading" style="color: #999; text-align: center; padding: 40px;">
 				Run some code to see results here
+			</div>
+		</div>
+	</div>
+
+	<div class="container" style="margin-top: 20px;">
+		<div class="panel">
+			<h3>Raw Input</h3>
+			<div x-show="rawInput">
+				<pre class="json-display" x-html="formatJson(rawInput)"></pre>
+			</div>
+			<div x-show="!rawInput" style="color: #999; text-align: center; padding: 40px;">
+				No request sent yet
+			</div>
+		</div>
+
+		<div class="panel">
+			<h3>Raw Output</h3>
+			<div x-show="rawOutput">
+				<pre class="json-display" x-html="formatJson(rawOutput)"></pre>
+			</div>
+			<div x-show="!rawOutput" style="color: #999; text-align: center; padding: 40px;">
+				No response received yet
 			</div>
 		</div>
 	</div>
@@ -126,6 +159,9 @@
 				error: null,
 				artifactContent: '',
 				artifactName: '',
+				isEmptyContent: false,
+				rawInput: null,
+				rawOutput: null,
 
 				async runCode() {
 					this.loading = true;
@@ -133,20 +169,29 @@
 					this.result = null;
 					this.artifactContent = '';
 					this.artifactName = '';
+					this.isEmptyContent = false;
+
+					const requestBody = {
+						sessionId: this.sessionId,
+						language: this.language,
+						code: this.code,
+						filename: this.filename
+					};
+
+					// Store raw input
+					this.rawInput = requestBody;
 
 					try {
 						const response = await fetch('/run', {
 							method: 'POST',
 							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({
-								sessionId: this.sessionId,
-								language: this.language,
-								code: this.code,
-								filename: this.filename
-							})
+							body: JSON.stringify(requestBody)
 						});
 
 						const data = await response.json();
+
+						// Store raw output
+						this.rawOutput = data;
 
 						if (!response.ok) {
 							this.error = data.error || 'Request failed: ' + response.status;
@@ -166,12 +211,37 @@
 				async fetchArtifact(url, name) {
 					this.artifactName = name;
 					this.artifactContent = 'Loading...';
+					this.isEmptyContent = false;
 					try {
 						const response = await fetch(url);
-						this.artifactContent = await response.text();
+						const text = await response.text();
+						if (text.trim() === '') {
+							this.isEmptyContent = true;
+							this.artifactContent = '';
+						} else {
+							this.isEmptyContent = false;
+							this.artifactContent = text;
+						}
 					} catch (err) {
+						this.isEmptyContent = false;
 						this.artifactContent = 'Error loading artifact: ' + err.message;
 					}
+				},
+
+				formatJson(obj) {
+					if (!obj) return '';
+					const json = JSON.stringify(obj, null, 2);
+
+					// Syntax highlight the JSON
+					return json
+						.replace(/&/g, '&amp;')
+						.replace(/</g, '&lt;')
+						.replace(/>/g, '&gt;')
+						.replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+						.replace(/: "([^"]+)"/g, ': <span class="json-string">"$1"</span>')
+						.replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+						.replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+						.replace(/: (null)/g, ': <span class="json-null">$1</span>');
 				}
 			}
 		}
