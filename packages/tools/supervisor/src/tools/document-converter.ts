@@ -4,8 +4,8 @@ import type {
 	ToolExecutionContext,
 	ToolExecutionResult,
 } from "../core/tool-handler.js";
-import type { DocumentConverterInput } from "../core/schemas.js";
-import { writeWorkspaceFile } from "../core/storage.js";
+import type { DocumentConverterInput } from "@any-agent/core/schemas";
+import { writeWorkspaceFile } from "@any-agent/core/storage";
 
 /**
  * Tool handler for converting documents to markdown using pandoc

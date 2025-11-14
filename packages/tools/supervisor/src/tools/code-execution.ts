@@ -4,8 +4,8 @@ import type {
 	ToolExecutionContext,
 	ToolExecutionResult,
 } from "../core/tool-handler.js";
-import type { CodeExecutionInput } from "../core/schemas.js";
-import { writeWorkspaceFile } from "../core/storage.js";
+import type { CodeExecutionInput } from "@any-agent/core/schemas";
+import { writeWorkspaceFile } from "@any-agent/core/storage";
 import path from "path";
 
 /**

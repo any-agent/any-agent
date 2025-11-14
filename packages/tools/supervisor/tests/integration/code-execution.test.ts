@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { RunResponseSchema } from "../../src/core/schemas";
-import { getJobWorkDir } from "../../src/core/storage";
+import { RunResponseSchema } from "@any-agent/core/schemas";
+import { getJobWorkDir } from "@any-agent/core/storage";
 import path from "path";
 
 const ENDPOINT = process.env.INTEGRATION_TEST_ENDPOINT || "http://localhost:8080";

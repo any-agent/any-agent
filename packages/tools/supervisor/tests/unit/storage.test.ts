@@ -3,7 +3,7 @@ import {
 	writeWorkspaceFile,
 	createWorkspace,
 	getJobWorkDir,
-} from "../../src/core/storage";
+} from "@any-agent/core/storage";
 import { readFile, rm } from "fs/promises";
 import path from "path";
 
