@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document Converter Tool - Debug</title>
+	<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+	<style>
+		* { box-sizing: border-box; }
+		body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+		h1 { color: #333; }
+		.container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+		@media (max-width: 768px) { .container { grid-template-columns: 1fr; } }
+		.panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		label { display: block; margin-bottom: 5px; font-weight: 600; color: #555; }
+		input, select, textarea { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; }
+		textarea { font-family: 'Monaco', 'Menlo', monospace; min-height: 120px; }
+		button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: 600; }
+		button:hover { background: #0056b3; }
+		button:disabled { background: #ccc; cursor: not-allowed; }
+		.result { margin-top: 20px; }
+		.result pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd; }
+		.error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; border: 1px solid #f5c6cb; }
+		.success { color: #155724; background: #d4edda; padding: 10px; border-radius: 4px; border: 1px solid #c3e6cb; }
+		.artifact-list { list-style: none; padding: 0; }
+		.artifact-list li { padding: 8px; background: #f8f9fa; margin-bottom: 5px; border-radius: 4px; }
+		.artifact-list a { color: #007bff; text-decoration: none; }
+		.artifact-list a:hover { text-decoration: underline; }
+		.loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
+		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+		h3 { margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+		.empty-content { color: #dc3545; font-style: italic; padding: 15px; background: #f8f9fa; border-radius: 4px; border: 1px solid #ddd; }
+		.json-display { background: #282c34; color: #abb2bf; padding: 15px; border-radius: 4px; overflow-x: auto; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; line-height: 1.5; max-height: 400px; overflow-y: auto; }
+		.json-key { color: #e06c75; }
+		.json-string { color: #98c379; }
+		.json-number { color: #d19a66; }
+		.json-boolean { color: #56b6c2; }
+		.json-null { color: #c678dd; }
+		.file-input-wrapper { position: relative; margin-bottom: 15px; }
+		.file-input-label { display: inline-block; padding: 8px 16px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; color: #333; }
+		.file-input-label:hover { background: #e9ecef; }
+		input[type="file"] { position: absolute; opacity: 0; width: 0; height: 0; }
+		.file-name { margin-left: 10px; color: #666; font-size: 14px; }
+		.example-scripts { background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
+		.example-scripts code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Menlo', monospace; }
+	</style>
+</head>
+<body x-data="debugApp()">
+	<h1>📄 Document Converter Tool - Debug</h1>
+	<p style="text-align: center; color: #666; margin-top: -10px; margin-bottom: 30px;">
+		<a href="/debug" style="color: #007bff; text-decoration: none;">← Back to tools</a>
+	</p>
+
+	<div class="container">
+		<div class="panel">
+			<h3>Input</h3>
+			<form @submit.prevent="convertDocument">
+				<label for="sessionId">Session ID</label>
+				<input type="text" id="sessionId" x-model="sessionId" placeholder="e.g., session-123" required>
+
+				<label for="file">Document File</label>
+				<div class="file-input-wrapper">
+					<label for="file" class="file-input-label">
+						Choose File
+					</label>
+					<input type="file" id="file" @change="handleFileSelect" required>
+					<span class="file-name" x-text="selectedFileName || 'No file chosen'"></span>
+				</div>
+
+				<label for="filename">Filename (will be set automatically from file)</label>
+				<input type="text" id="filename" x-model="filename" placeholder="e.g., document.pdf" required readonly>
+
+				<label for="timeout">Timeout (seconds, max: 900)</label>
+				<input type="number" id="timeout" x-model.number="timeout" placeholder="30" min="1" max="900" required>
+
+				<label for="conversionScript">Conversion Script</label>
+				<div class="example-scripts">
+					<strong>Examples:</strong><br>
+					PDF to Markdown: <code>pdftohtml -s -i input.pdf temp && pandoc temp-html.html -o output.md</code><br>
+					PDF to Text: <code>pdftotext input.pdf output.txt</code><br>
+					DOCX to Markdown: <code>pandoc input.docx -o output.md</code><br>
+					HTML to Markdown: <code>pandoc input.html -o output.md</code><br>
+					<em>Note: pdftohtml -s creates temp-html.html from "temp" basename</em>
+				</div>
+				<textarea id="conversionScript" x-model="conversionScript" placeholder="e.g., pandoc input.pdf -o output.md" required></textarea>
+
+				<button type="submit" :disabled="loading || !fileContent">
+					<span x-show="!loading">▶ Convert Document</span>
+					<span x-show="loading"><span class="loading"></span> Converting...</span>
+				</button>
+			</form>
+		</div>
+
+		<div class="panel">
+			<h3>Output</h3>
+
+			<div x-show="error" class="error" x-text="error"></div>
+
+			<div x-show="result && !error">
+				<div class="success" style="margin-bottom: 15px;">
+					✓ Conversion completed<br>
+					<strong>Session:</strong> <span x-text="result?.sessionId"></span><br>
+					<strong>Job ID:</strong> <span x-text="result?.id"></span><br>
+					<strong>Exit Code:</strong> <span x-text="result?.exitCode"></span>
+				</div>
+
+				<div x-show="result?.artifacts?.inputs && Object.keys(result.artifacts.inputs).length > 0">
+					<h4 style="margin-top: 20px;">📥 Input Artifacts</h4>
+					<ul class="artifact-list">
+						<template x-for="[name, url] in Object.entries(result?.artifacts?.inputs || {})" :key="name">
+							<li>
+								<strong x-text="name"></strong> -
+								<a :href="url" target="_blank">Download</a>
+							</li>
+						</template>
+					</ul>
+				</div>
+
+				<div x-show="result?.artifacts?.outputs && Object.keys(result.artifacts.outputs).length > 0">
+					<h4 style="margin-top: 20px;">📤 Output Artifacts</h4>
+					<ul class="artifact-list">
+						<template x-for="[name, url] in Object.entries(result?.artifacts?.outputs || {})" :key="name">
+							<li>
+								<strong x-text="name"></strong> -
+								<a :href="url" target="_blank">Download</a>
+								<span x-show="name === 'stdout' || name === 'stderr' || name.endsWith('.md')">
+									(<a href="#" @click.prevent="fetchArtifact(url, name)">view</a>)
+								</span>
+							</li>
+						</template>
+					</ul>
+				</div>
+
+				<div x-show="artifactName">
+					<h4 style="margin-top: 20px;" x-text="'Content: ' + artifactName"></h4>
+					<pre x-show="artifactContent && !isEmptyContent" x-text="artifactContent"></pre>
+					<div x-show="isEmptyContent" class="empty-content">no content</div>
+				</div>
+			</div>
+
+			<div x-show="!result && !error && !loading" style="color: #999; text-align: center; padding: 40px;">
+				Upload and convert a document to see results here
+			</div>
+		</div>
+	</div>
+
+	<div class="container" style="margin-top: 20px;">
+		<div class="panel">
+			<h3>Raw Input</h3>
+			<div x-show="rawInput">
+				<pre class="json-display" x-html="formatJson(rawInput)"></pre>
+			</div>
+			<div x-show="!rawInput" style="color: #999; text-align: center; padding: 40px;">
+				No request sent yet
+			</div>
+		</div>
+
+		<div class="panel">
+			<h3>Raw Output</h3>
+			<div x-show="rawOutput">
+				<pre class="json-display" x-html="formatJson(rawOutput)"></pre>
+			</div>
+			<div x-show="!rawOutput" style="color: #999; text-align: center; padding: 40px;">
+				No response received yet
+			</div>
+		</div>
+	</div>
+
+	<script>
+		function debugApp() {
+			return {
+				sessionId: 'debug-session-' + Date.now(),
+				filename: '',
+				selectedFileName: '',
+				fileContent: '',
+				timeout: 30,
+				conversionScript: 'pandoc input.pdf -o output.md',
+				loading: false,
+				result: null,
+				error: null,
+				artifactContent: '',
+				artifactName: '',
+				isEmptyContent: false,
+				rawInput: null,
+				rawOutput: null,
+
+				handleFileSelect(event) {
+					const file = event.target.files[0];
+					if (!file) {
+						this.selectedFileName = '';
+						this.filename = '';
+						this.fileContent = '';
+						return;
+					}
+
+					this.selectedFileName = file.name;
+					this.filename = file.name;
+
+					// Read file as base64
+					const reader = new FileReader();
+					reader.onload = (e) => {
+						// Get base64 string (remove data:...;base64, prefix)
+						const base64 = e.target.result.split(',')[1];
+						this.fileContent = base64;
+					};
+					reader.readAsDataURL(file);
+
+					// Update conversion script suggestion based on file extension
+					const ext = file.name.split('.').pop().toLowerCase();
+					const inputName = file.name;
+					if (ext === 'pdf') {
+						this.conversionScript = `pdftohtml -s -i "${inputName}" temp && pandoc temp-html.html -o output.md`;
+					} else if (ext === 'docx') {
+						this.conversionScript = `pandoc "${inputName}" -o output.md`;
+					} else if (ext === 'html' || ext === 'htm') {
+						this.conversionScript = `pandoc "${inputName}" -o output.md`;
+					} else {
+						this.conversionScript = `pandoc "${inputName}" -o output.md`;
+					}
+				},
+
+				async convertDocument() {
+					this.loading = true;
+					this.error = null;
+					this.result = null;
+					this.artifactContent = '';
+					this.artifactName = '';
+					this.isEmptyContent = false;
+
+					const requestBody = {
+						tool: 'document_converter',
+						sessionId: this.sessionId,
+						fileContent: this.fileContent,
+						filename: this.filename,
+						conversionScript: this.conversionScript,
+						timeout: this.timeout
+					};
+
+					// Store raw input (excluding base64 content for readability)
+					this.rawInput = {
+						...requestBody,
+						fileContent: `<base64 data: ${this.fileContent.length} bytes>`
+					};
+
+					try {
+						const response = await fetch('/tools/execute', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(requestBody)
+						});
+
+						const data = await response.json();
+
+						// Store raw output
+						this.rawOutput = data;
+
+						if (!response.ok) {
+							this.error = data.error || 'Request failed: ' + response.status;
+							if (data.details) {
+								this.error += '\n' + JSON.stringify(data.details, null, 2);
+							}
+						} else {
+							this.result = data;
+						}
+					} catch (err) {
+						this.error = 'Network error: ' + err.message;
+					} finally {
+						this.loading = false;
+					}
+				},
+
+				async fetchArtifact(url, name) {
+					this.artifactName = name;
+					this.artifactContent = 'Loading...';
+					this.isEmptyContent = false;
+					try {
+						const response = await fetch(url);
+						const text = await response.text();
+						if (text.trim() === '') {
+							this.isEmptyContent = true;
+							this.artifactContent = '';
+						} else {
+							this.isEmptyContent = false;
+							this.artifactContent = text;
+						}
+					} catch (err) {
+						this.isEmptyContent = false;
+						this.artifactContent = 'Error loading artifact: ' + err.message;
+					}
+				},
+
+				formatJson(obj) {
+					if (!obj) return '';
+					const json = JSON.stringify(obj, null, 2);
+
+					// Syntax highlight the JSON
+					return json
+						.replace(/&/g, '&amp;')
+						.replace(/</g, '&lt;')
+						.replace(/>/g, '&gt;')
+						.replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+						.replace(/: "([^"]+)"/g, ': <span class="json-string">"$1"</span>')
+						.replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+						.replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+						.replace(/: (null)/g, ': <span class="json-null">$1</span>');
+				}
+			}
+		}
+	</script>
+</body>
+</html>

@@ -22,6 +22,7 @@ import {
 } from "./core/storage.js";
 import { ToolRegistry } from "./core/tool-handler.js";
 import { CodeExecutionTool } from "./tools/code-execution.js";
+import { DocumentConverterTool } from "./tools/document-converter.js";
 
 const docker = new Docker({
 	// socketPath: path.join(os.homedir(), "podman/podman.sock"),
@@ -36,6 +37,7 @@ docker.version().then(console.log).catch((e) => {
 // Tool registry - register all available tools
 const toolRegistry = new ToolRegistry();
 toolRegistry.register(new CodeExecutionTool(docker));
+toolRegistry.register(new DocumentConverterTool(docker));
 
 console.log("Registered tools:", toolRegistry.getToolTypes().join(", "));
 
@@ -74,6 +76,7 @@ if (process.env.DEBUG_UI === "true") {
 	console.log("Debug UI enabled:");
 	console.log("  - Landing page: /debug");
 	console.log("  - Code execution: /debug/code-execution");
+	console.log("  - Document converter: /debug/document-converter");
 }
 
 // POST /tools/execute - Execute any registered tool

@@ -23,9 +23,21 @@ export const CodeExecutionInputSchema = BaseToolRequestSchema.extend({
 	filename: z.string().default("script.js"),
 });
 
+// Document converter tool schemas
+export const DocumentConverterInputSchema = BaseToolRequestSchema.extend({
+	tool: z.literal("document_converter"),
+	fileContent: z.string().min(1, "File content must not be empty (base64 encoded)"),
+	filename: z.string().min(1, "Filename must not be empty"),
+	conversionScript: z
+		.string()
+		.min(1, "Conversion script must not be empty")
+		.describe("Bash script for running pandoc conversion (e.g., 'pandoc input.pdf -o output.md')"),
+});
+
 // Union of all tool input schemas (add more as tools are created)
 export const ToolRequestSchema = z.discriminatedUnion("tool", [
 	CodeExecutionInputSchema,
+	DocumentConverterInputSchema,
 ]);
 
 // Tool response schema (generic for all tools)
@@ -46,6 +58,7 @@ export const RunResponseSchema = ToolResponseSchema.omit({ tool: true });
 
 // Types
 export type CodeExecutionInput = z.infer<typeof CodeExecutionInputSchema>;
+export type DocumentConverterInput = z.infer<typeof DocumentConverterInputSchema>;
 export type ToolRequest = z.infer<typeof ToolRequestSchema>;
 export type ToolResponse = z.infer<typeof ToolResponseSchema>;
 

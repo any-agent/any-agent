@@ -49,7 +49,7 @@ export async function createWorkspace(sessionId: string, jobId: string): Promise
 export async function writeWorkspaceFile(
 	workDir: string,
 	filename: string,
-	content: string
+	content: string | Buffer
 ): Promise<string> {
 	const filePath = path.join(workDir, filename);
 	await writeFile(filePath, content);
