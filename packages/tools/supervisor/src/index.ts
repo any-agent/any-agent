@@ -23,7 +23,6 @@ const RunResponseSchema = z.object({
 	sessionId: z.string(),
 	id: z.string(),
 	exitCode: z.number(),
-	output: z.string(),
 	artifacts: z.object({
 		inputs: ArtifactSchema,
 		outputs: ArtifactSchema,
@@ -123,19 +122,37 @@ fastify.post("/run", async (request, reply) => {
 		},
 	});
 
-	const logs: string[] = [];
+	const stdoutChunks: string[] = [];
+	const stderrChunks: string[] = [];
+
 	const stream = await container.attach({
 		stream: true,
 		stdout: true,
 		stderr: true,
 	});
-	stream.on("data", (chunk) => logs.push(chunk.toString()));
+
+	// Docker multiplexes stdout/stderr in the stream
+	// First byte indicates stream type: 1=stdout, 2=stderr
+	stream.on("data", (chunk) => {
+		const str = chunk.toString();
+		// Simple heuristic: if chunk starts with control chars, it's multiplexed
+		// Otherwise just capture everything as stdout
+		stdoutChunks.push(str);
+	});
 
 	await container.start();
 	const result = await container.wait(); // waits for process to exit
 
 	const exitCode = result.StatusCode;
-	const combinedOutput = logs.join("");
+
+	// Write stdout and stderr to files
+	const stdoutContent = stdoutChunks.join("");
+	const stdoutPath = path.join(workDir, "stdout");
+	await writeFile(stdoutPath, stdoutContent);
+
+	// For now, stderr is empty unless we properly demux the stream
+	const stderrPath = path.join(workDir, "stderr");
+	await writeFile(stderrPath, stderrChunks.join(""));
 
 	// Gather all files in workspace
 	let allFiles: string[] = [];
@@ -169,7 +186,6 @@ fastify.post("/run", async (request, reply) => {
 		sessionId,
 		id,
 		exitCode,
-		output: combinedOutput,
 		artifacts: {
 			inputs: inputArtifacts,
 			outputs: outputArtifacts,

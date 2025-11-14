@@ -53,8 +53,9 @@ Containers are configured with:
 
 **POST /run**
 - Accepts: `{ sessionId, language, code, filename }`
-- Returns: `{ sessionId, id, exitCode, output, artifacts: { inputs, outputs } }`
+- Returns: `{ sessionId, id, exitCode, artifacts: { inputs, outputs } }`
 - Artifacts are dictionaries mapping filenames to download URLs
+- stdout/stderr are written as artifact files instead of being in the response
 
 **GET /artifacts/:sessionId/:jobId/:filename**
 - Downloads artifact files from completed jobs

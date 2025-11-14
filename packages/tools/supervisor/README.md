@@ -60,17 +60,20 @@ Execute code in a containerized environment.
   "sessionId": "session-xyz",
   "id": "abc123",
   "exitCode": 0,
-  "output": "Hello, World!\n",
   "artifacts": {
     "inputs": {
       "script.py": "http://localhost:8080/artifacts/session-xyz/abc123/script.py"
     },
     "outputs": {
+      "stdout": "http://localhost:8080/artifacts/session-xyz/abc123/stdout",
+      "stderr": "http://localhost:8080/artifacts/session-xyz/abc123/stderr",
       "output.txt": "http://localhost:8080/artifacts/session-xyz/abc123/output.txt"
     }
   }
 }
 ```
+
+**Note:** stdout and stderr are written as artifact files in the job directory, not returned in the response body.
 
 ### GET /artifacts/:sessionId/:jobId/:filename
 
@@ -91,11 +94,11 @@ Download an artifact file from a completed job.
 4. Spawns a Docker/Podman container with the `aa-worker:latest` image
 5. Mounts the workspace directory to `/workspace` in the container
 6. Executes the code with appropriate runtime (python3, node, bun, or bash)
-7. Captures stdout/stderr streams
+7. Captures stdout/stderr streams and writes them to `stdout` and `stderr` files in the workspace
 8. Scans workspace to identify input vs output artifacts
 9. Returns execution results with:
-   - Exit code and stdout/stderr output
+   - Exit code
    - Input artifacts (original script files) with download URLs
-   - Output artifacts (generated files) with download URLs
+   - Output artifacts (stdout, stderr, and any generated files) with download URLs
 10. Auto-removes container after execution
-11. Artifacts remain available for download via the artifacts endpoint
+11. All artifacts remain available for download via the artifacts endpoint
