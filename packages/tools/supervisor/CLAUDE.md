@@ -40,7 +40,7 @@ bun run stop     # Stop containers
 bun run restart  # Restart containers
 ```
 
-The npm/bun scripts automatically detect and use either Docker or Podman, whichever is installed. See `scripts/README.md` for details.
+The npm/bun scripts automatically detect and use either Docker or Podman, whichever is installed. This is provided by the `@any-agent/scripts` workspace package. See `packages/scripts/README.md` for details.
 
 ### Environment Configuration
 
@@ -48,7 +48,7 @@ The npm/bun scripts automatically detect and use either Docker or Podman, whiche
 - Set `DEBUG_UI=true` to enable the debug UI at `/debug` (optional)
 - Bun automatically loads .env files
 
-**Note:** The container runtime (Docker/Podman) is automatically detected by `scripts/container-runtime.sh`. No manual configuration needed.
+**Note:** The container runtime (Docker/Podman) is automatically detected by the `@any-agent/scripts` workspace package. Scripts use `container-runtime` directly (bin is in PATH) - simple and clean with no path issues. No manual configuration required.
 
 ### Registered Tools
 

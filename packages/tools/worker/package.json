@@ -1,6 +1,11 @@
 {
   "name": "@any-agent/tools-worker",
+  "version": "0.0.1",
+  "private": true,
   "scripts": {
-    "build": "podman build -t aa-worker:latest .",
+    "build": "container-runtime build -t aa-worker:latest ."
+  },
+  "dependencies": {
+    "@any-agent/scripts": "workspace:*"
   }
 }

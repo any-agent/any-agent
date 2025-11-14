@@ -1,0 +1,12 @@
+{
+  "name": "@any-agent/scripts",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared scripts for the any-agent monorepo",
+  "bin": {
+    "container-runtime": "./container-runtime.sh"
+  },
+  "files": [
+    "container-runtime.sh"
+  ]
+}
