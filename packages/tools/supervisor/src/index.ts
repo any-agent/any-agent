@@ -263,7 +263,25 @@ fastify.post("/run", async (request, reply) => {
 	}
 });
 
+// Start the server
 fastify.listen({ port: 8080, host: "0.0.0.0" }).catch((err) => {
 	fastify.log.error(err);
 	process.exit(1);
 });
+
+// Graceful shutdown handling
+const shutdown = async (signal: string) => {
+	console.log(`\nReceived ${signal}, closing server gracefully...`);
+	try {
+		await fastify.close();
+		console.log("Server closed successfully");
+		process.exit(0);
+	} catch (err) {
+		console.error("Error during shutdown:", err);
+		process.exit(1);
+	}
+};
+
+// Listen for termination signals
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
