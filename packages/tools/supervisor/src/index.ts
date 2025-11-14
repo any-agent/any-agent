@@ -1,36 +1,22 @@
 // server.js
 import Fastify from "fastify";
 import Docker from "dockerode";
-import { writeFile, readdir } from "node:fs/promises";
 import path from "path";
-import { mkdir, chmod } from "fs/promises";
 import { nanoid } from "nanoid";
 import process from "node:process";
-import os from "node:os";
-import { z } from "zod";
-
-// Zod schemas for request/response validation
-const RunRequestSchema = z.object({
-	sessionId: z.string().min(1, "Session ID must not be empty"),
-	language: z.enum(["python", "node", "bun", "bash"]).default("bash"),
-	code: z.string().min(1, "Code must not be empty"),
-	filename: z.string().default("script.js"),
-});
-
-const ArtifactSchema = z.record(z.string(), z.string()); // { filename: url }
-
-const RunResponseSchema = z.object({
-	sessionId: z.string(),
-	id: z.string(),
-	exitCode: z.number(),
-	artifacts: z.object({
-		inputs: ArtifactSchema,
-		outputs: ArtifactSchema,
-	}),
-});
-
-type RunRequest = z.infer<typeof RunRequestSchema>;
-type RunResponse = z.infer<typeof RunResponseSchema>;
+import {
+	RunRequestSchema,
+	RunResponseSchema,
+	type RunRequest,
+	type RunResponse,
+} from "./core/schemas.js";
+import {
+	getArtifactPath,
+	createWorkspace,
+	writeWorkspaceFile,
+	listWorkspaceFiles,
+	categorizeArtifacts,
+} from "./core/storage.js";
 
 const docker = new Docker({
 	// socketPath: path.join(os.homedir(), "podman/podman.sock"),
@@ -45,6 +31,16 @@ docker.version().then(console.log).catch((e) => {
 // Fastify server instance
 const fastify = Fastify({ logger: true });
 
+// GET /debug - Debug UI for testing the supervisor (only if DEBUG_UI env var is set)
+if (process.env.DEBUG_UI === "true") {
+	fastify.get("/debug", async (request, reply) => {
+		const debugHtmlPath = path.join(import.meta.dir, "debug.html");
+		const debugHtml = await Bun.file(debugHtmlPath).text();
+		reply.type("text/html").send(debugHtml);
+	});
+	console.log("Debug UI enabled at /debug");
+}
+
 // GET /artifacts/:sessionId/:jobId/:filename - Download artifact
 fastify.get("/artifacts/:sessionId/:jobId/:filename", async (request, reply) => {
 	const { sessionId, jobId, filename } = request.params as {
@@ -53,8 +49,7 @@ fastify.get("/artifacts/:sessionId/:jobId/:filename", async (request, reply) => 
 		filename: string;
 	};
 
-	const baseDir = path.join(os.homedir(), ".aa-storage");
-	const artifactPath = path.join(baseDir, sessionId, `job-${jobId}`, filename);
+	const artifactPath = getArtifactPath(sessionId, jobId, filename);
 
 	// Send file or 404 if not found
 	try {
@@ -91,15 +86,10 @@ fastify.post("/run", async (request, reply) => {
 	const { sessionId, language, code, filename } = parseResult.data;
 
 	const id = nanoid(6);
-	const baseDir = path.join(os.homedir(), ".aa-storage");
-	const sessionDir = path.join(baseDir, sessionId);
-	const workDir = path.join(sessionDir, `job-${id}`);
-	console.log("processing job: ", workDir)
-	await mkdir(workDir, { recursive: true });
-	await chmod(workDir, 0o755);
+	const workDir = await createWorkspace(sessionId, id);
+	console.log("processing job: ", workDir);
 
-	const scriptPath = path.join(workDir, filename);
-	await writeFile(scriptPath, code);
+	await writeWorkspaceFile(workDir, filename, code);
 
 	// Track input files
 	const inputFiles = new Set([filename]);
@@ -147,40 +137,26 @@ fastify.post("/run", async (request, reply) => {
 
 	// Write stdout and stderr to files
 	const stdoutContent = stdoutChunks.join("");
-	const stdoutPath = path.join(workDir, "stdout");
-	await writeFile(stdoutPath, stdoutContent);
+	await writeWorkspaceFile(workDir, "stdout", stdoutContent);
 
 	// For now, stderr is empty unless we properly demux the stream
-	const stderrPath = path.join(workDir, "stderr");
-	await writeFile(stderrPath, stderrChunks.join(""));
+	const stderrContent = stderrChunks.join("");
+	await writeWorkspaceFile(workDir, "stderr", stderrContent);
 
 	// Gather all files in workspace
-	let allFiles: string[] = [];
-	try {
-		allFiles = await readdir(workDir);
-	} catch (err) {
-		fastify.log.error(err);
-	}
+	const allFiles = await listWorkspaceFiles(workDir);
 
-	// Helper function to generate artifact URL
-	const getArtifactUrl = (filename: string) => {
-		const host = request.headers.host || "localhost:8080";
-		const protocol = request.protocol || "http";
-		return `${protocol}://${host}/artifacts/${sessionId}/${id}/${filename}`;
-	};
-
-	// Separate inputs and outputs
-	const inputArtifacts: Record<string, string> = {};
-	const outputArtifacts: Record<string, string> = {};
-
-	for (const file of allFiles) {
-		const url = getArtifactUrl(file);
-		if (inputFiles.has(file)) {
-			inputArtifacts[file] = url;
-		} else {
-			outputArtifacts[file] = url;
-		}
-	}
+	// Categorize artifacts into inputs and outputs
+	const host = request.headers.host || "localhost:8080";
+	const protocol = request.protocol || "http";
+	const { inputs: inputArtifacts, outputs: outputArtifacts } = categorizeArtifacts(
+		allFiles,
+		inputFiles,
+		protocol,
+		host,
+		sessionId,
+		id
+	);
 
 	const response: RunResponse = {
 		sessionId,

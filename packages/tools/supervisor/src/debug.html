@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Code Execution Supervisor - Debug</title>
+	<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+	<style>
+		* { box-sizing: border-box; }
+		body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+		h1 { color: #333; }
+		.container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+		@media (max-width: 768px) { .container { grid-template-columns: 1fr; } }
+		.panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		label { display: block; margin-bottom: 5px; font-weight: 600; color: #555; }
+		input, select, textarea { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; }
+		textarea { font-family: 'Monaco', 'Menlo', monospace; min-height: 200px; }
+		button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: 600; }
+		button:hover { background: #0056b3; }
+		button:disabled { background: #ccc; cursor: not-allowed; }
+		.result { margin-top: 20px; }
+		.result pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd; }
+		.error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; border: 1px solid #f5c6cb; }
+		.success { color: #155724; background: #d4edda; padding: 10px; border-radius: 4px; border: 1px solid #c3e6cb; }
+		.artifact-list { list-style: none; padding: 0; }
+		.artifact-list li { padding: 8px; background: #f8f9fa; margin-bottom: 5px; border-radius: 4px; }
+		.artifact-list a { color: #007bff; text-decoration: none; }
+		.artifact-list a:hover { text-decoration: underline; }
+		.loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
+		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+		h3 { margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+	</style>
+</head>
+<body x-data="debugApp()">
+	<h1>🔧 Code Execution Supervisor - Debug</h1>
+
+	<div class="container">
+		<div class="panel">
+			<h3>Input</h3>
+			<form @submit.prevent="runCode">
+				<label for="sessionId">Session ID</label>
+				<input type="text" id="sessionId" x-model="sessionId" placeholder="e.g., session-123" required>
+
+				<label for="language">Language</label>
+				<select id="language" x-model="language">
+					<option value="bash">Bash</option>
+					<option value="python">Python</option>
+					<option value="node">Node.js</option>
+					<option value="bun">Bun</option>
+				</select>
+
+				<label for="filename">Filename</label>
+				<input type="text" id="filename" x-model="filename" placeholder="e.g., script.py" required>
+
+				<label for="code">Code</label>
+				<textarea id="code" x-model="code" placeholder="Enter your code here..." required></textarea>
+
+				<button type="submit" :disabled="loading">
+					<span x-show="!loading">▶ Run Code</span>
+					<span x-show="loading"><span class="loading"></span> Running...</span>
+				</button>
+			</form>
+		</div>
+
+		<div class="panel">
+			<h3>Output</h3>
+
+			<div x-show="error" class="error" x-text="error"></div>
+
+			<div x-show="result && !error">
+				<div class="success" style="margin-bottom: 15px;">
+					✓ Job completed<br>
+					<strong>Session:</strong> <span x-text="result?.sessionId"></span><br>
+					<strong>Job ID:</strong> <span x-text="result?.id"></span><br>
+					<strong>Exit Code:</strong> <span x-text="result?.exitCode"></span>
+				</div>
+
+				<div x-show="result?.artifacts?.inputs && Object.keys(result.artifacts.inputs).length > 0">
+					<h4 style="margin-top: 20px;">📥 Input Artifacts</h4>
+					<ul class="artifact-list">
+						<template x-for="[name, url] in Object.entries(result?.artifacts?.inputs || {})" :key="name">
+							<li>
+								<strong x-text="name"></strong> -
+								<a :href="url" target="_blank">Download</a>
+							</li>
+						</template>
+					</ul>
+				</div>
+
+				<div x-show="result?.artifacts?.outputs && Object.keys(result.artifacts.outputs).length > 0">
+					<h4 style="margin-top: 20px;">📤 Output Artifacts</h4>
+					<ul class="artifact-list">
+						<template x-for="[name, url] in Object.entries(result?.artifacts?.outputs || {})" :key="name">
+							<li>
+								<strong x-text="name"></strong> -
+								<a :href="url" target="_blank">Download</a>
+								<span x-show="name === 'stdout' || name === 'stderr'">
+									(<a href="#" @click.prevent="fetchArtifact(url, name)">view</a>)
+								</span>
+							</li>
+						</template>
+					</ul>
+				</div>
+
+				<div x-show="artifactContent">
+					<h4 style="margin-top: 20px;" x-text="'Content: ' + artifactName"></h4>
+					<pre x-text="artifactContent"></pre>
+				</div>
+			</div>
+
+			<div x-show="!result && !error && !loading" style="color: #999; text-align: center; padding: 40px;">
+				Run some code to see results here
+			</div>
+		</div>
+	</div>
+
+	<script>
+		function debugApp() {
+			return {
+				sessionId: 'debug-session-' + Date.now(),
+				language: 'python',
+				filename: 'script.py',
+				code: 'print("Hello from the supervisor!")',
+				loading: false,
+				result: null,
+				error: null,
+				artifactContent: '',
+				artifactName: '',
+
+				async runCode() {
+					this.loading = true;
+					this.error = null;
+					this.result = null;
+					this.artifactContent = '';
+					this.artifactName = '';
+
+					try {
+						const response = await fetch('/run', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({
+								sessionId: this.sessionId,
+								language: this.language,
+								code: this.code,
+								filename: this.filename
+							})
+						});
+
+						const data = await response.json();
+
+						if (!response.ok) {
+							this.error = data.error || 'Request failed: ' + response.status;
+							if (data.details) {
+								this.error += '\n' + JSON.stringify(data.details, null, 2);
+							}
+						} else {
+							this.result = data;
+						}
+					} catch (err) {
+						this.error = 'Network error: ' + err.message;
+					} finally {
+						this.loading = false;
+					}
+				},
+
+				async fetchArtifact(url, name) {
+					this.artifactName = name;
+					this.artifactContent = 'Loading...';
+					try {
+						const response = await fetch(url);
+						this.artifactContent = await response.text();
+					} catch (err) {
+						this.artifactContent = 'Error loading artifact: ' + err.message;
+					}
+				}
+			}
+		}
+	</script>
+</body>
+</html>

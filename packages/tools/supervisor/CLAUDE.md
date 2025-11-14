@@ -30,6 +30,7 @@ bun run src/index.ts
 ### Environment Configuration
 
 - Set `DOCKER_SOCKET_PATH` to point to your Docker/Podman socket
+- Set `DEBUG_UI=true` to enable the debug UI at `/debug` (optional)
 - Bun automatically loads .env files
 
 ### Supported Languages
@@ -62,9 +63,17 @@ Containers are configured with:
 - Uses `Bun.file()` for efficient file serving
 - Returns appropriate Content-Type headers
 
+**GET /debug** (only when `DEBUG_UI=true`)
+- Interactive HTML debug UI for testing the supervisor
+- Loaded from `src/debug.html` file
+- Uses Alpine.js for reactivity (no build step required)
+- Allows testing code execution with immediate feedback
+- Displays artifacts with inline viewing for stdout/stderr
+
 ### Code Organization
 
 - `src/index.ts` - Main supervisor with Fastify server and Docker orchestration
+- `src/debug.html` - Debug UI (only served when `DEBUG_UI=true`)
 - Uses dockerode for Docker/Podman compatibility
 - Workspaces organized as `~/.aa-storage/{sessionId}/job-{id}`
 - Input files (submitted code) tracked separately from output files (generated artifacts)

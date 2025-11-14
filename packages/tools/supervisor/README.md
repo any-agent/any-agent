@@ -27,6 +27,7 @@ bun install
 - Docker or Podman installed and running
 - Built worker image: `aa-worker:latest` (Ubuntu-based image with python3, node, and bun)
 - Set `DOCKER_SOCKET_PATH` environment variable (defaults to Docker socket)
+- Optional: Set `DEBUG_UI=true` to enable the debug UI at `/debug`
 
 ## Running the Supervisor
 
@@ -85,6 +86,19 @@ Download an artifact file from a completed job.
 - `filename`: The name of the artifact file
 
 **Response:** Binary file download with appropriate Content-Type header
+
+### GET /debug
+
+Interactive debug UI for testing the supervisor. Access at `http://localhost:8080/debug`
+
+**Note:** This endpoint is only available when `DEBUG_UI=true` is set in the environment.
+
+**Features:**
+- Form inputs for sessionId, language, code, and filename
+- Execute code and view results
+- Display input and output artifacts with download links
+- Inline viewer for stdout/stderr content
+- Error handling and validation feedback
 
 ## How It Works
 
