@@ -7,7 +7,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
+import { SeparateSSEChatTransport } from '../lib/use-chat-transports'
 
 import type { UIMessage } from 'ai'
 
@@ -107,8 +107,17 @@ function Messages({ messages }: { messages: Array<UIMessage> }) {
 
 function ChatPage() {
   const { messages, sendMessage } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
+    transport: new SeparateSSEChatTransport({
+      chatApi: '/api/chat',
+      eventsApi: (identifier: string) => {
+        // identifier is "sessionId:requestId" format
+        const [sessionId, requestId] = identifier.split(':')
+        return `/api/events?sessionId=${sessionId}&requestId=${requestId}`
+      },
+      extractIdentifier: async (response: Response) => {
+        const data = await response.json()
+        return `${data.sessionId}:${data.requestId}` as string
+      },
     }),
   })
   const [input, setInput] = useState('')
