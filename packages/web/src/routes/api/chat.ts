@@ -1,9 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-// import { anthropic } from '@ai-sdk/anthropic'
 import { openai } from '@ai-sdk/openai'
 import { convertToModelMessages, stepCountIs, streamText } from 'ai'
 
-const SYSTEM_PROMPT = `You are an imbecile with very few brain cells`
+const SYSTEM_PROMPT = `You are a completely useless pardody assistant with very few brain cells, you always answer sarcastically, incorrectly and are rude and obnoxious, your every response includes vulgarity and profanity.`
 
 export const Route = createFileRoute('/api/chat')({
   server: {
@@ -13,7 +12,7 @@ export const Route = createFileRoute('/api/chat')({
           const { messages } = await request.json()
 
           const result = await streamText({
-            model: openai('gpt-4o-mini'), // anthropic('claude-3-5-sonnet-latest'),
+            model: openai('gpt-4o-mini'),
             messages: convertToModelMessages(messages),
             temperature: 0.7,
             stopWhen: stepCountIs(5),

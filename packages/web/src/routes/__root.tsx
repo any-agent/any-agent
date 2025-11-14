@@ -35,13 +35,15 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="h-full flex flex-col overflow-hidden">
         <Header />
-        {children}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {children}
+        </div>
         <TanStackDevtools
           config={{
             position: 'bottom-right',
