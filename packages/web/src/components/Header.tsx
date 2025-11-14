@@ -62,6 +62,18 @@ export default function Header() {
             <MessagesSquare size={20} />
             <span className="font-medium">Chat</span>
           </Link>
+          <Link
+            to="/chat-old"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
+            activeProps={{
+              className:
+                'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
+            }}
+          >
+            <MessagesSquare size={20} />
+            <span className="font-medium">Chat Old</span>
+          </Link>
         </nav>
 
         <div className="p-4 border-t border-gray-700 bg-gray-800 flex flex-col gap-2">

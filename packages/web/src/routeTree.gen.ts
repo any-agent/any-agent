@@ -9,10 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ChatOldRouteImport } from './routes/chat-old'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiChatOldRouteImport } from './routes/api/chat-old'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const ChatOldRoute = ChatOldRouteImport.update({
+  id: '/chat-old',
+  path: '/chat-old',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -21,6 +28,11 @@ const ChatRoute = ChatRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatOldRoute = ApiChatOldRouteImport.update({
+  id: '/api/chat-old',
+  path: '/api/chat-old',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -32,35 +44,50 @@ const ApiChatRoute = ApiChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
+  '/chat-old': typeof ChatOldRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-old': typeof ApiChatOldRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
+  '/chat-old': typeof ChatOldRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-old': typeof ApiChatOldRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
+  '/chat-old': typeof ChatOldRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-old': typeof ApiChatOldRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chat' | '/api/chat'
+  fullPaths: '/' | '/chat' | '/chat-old' | '/api/chat' | '/api/chat-old'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chat' | '/api/chat'
-  id: '__root__' | '/' | '/chat' | '/api/chat'
+  to: '/' | '/chat' | '/chat-old' | '/api/chat' | '/api/chat-old'
+  id: '__root__' | '/' | '/chat' | '/chat-old' | '/api/chat' | '/api/chat-old'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChatRoute: typeof ChatRoute
+  ChatOldRoute: typeof ChatOldRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiChatOldRoute: typeof ApiChatOldRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/chat-old': {
+      id: '/chat-old'
+      path: '/chat-old'
+      fullPath: '/chat-old'
+      preLoaderRoute: typeof ChatOldRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chat': {
       id: '/chat'
       path: '/chat'
@@ -73,6 +100,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat-old': {
+      id: '/api/chat-old'
+      path: '/api/chat-old'
+      fullPath: '/api/chat-old'
+      preLoaderRoute: typeof ApiChatOldRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -88,7 +122,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChatRoute: ChatRoute,
+  ChatOldRoute: ChatOldRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiChatOldRoute: ApiChatOldRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
