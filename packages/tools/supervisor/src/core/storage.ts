@@ -1,12 +1,22 @@
 import path from "path";
 import os from "node:os";
+import process from "node:process";
 import { mkdir, chmod, readdir, writeFile } from "fs/promises";
 
 /**
  * Get the base storage directory path
+ * Uses AA_STORAGE_PATH environment variable if set, otherwise defaults to ~/.aa-storage
+ *
+ * In containerized deployments, AA_STORAGE_PATH should be set to a path that exists
+ * on the host and mounted at the same path in the container. This ensures the Docker
+ * daemon can mount workspace directories into worker containers.
+ *
+ * Platform-specific paths:
+ * - Mac: /Users/yourname/aa-storage (NOT /tmp - VirtioFS has SELinux issues)
+ * - Linux: /var/lib/aa-storage or $HOME/.local/share/aa-storage
  */
 export function getBaseStorageDir(): string {
-	return path.join(os.homedir(), ".aa-storage");
+	return process.env.AA_STORAGE_PATH || path.join(os.homedir(), ".aa-storage");
 }
 
 /**

@@ -38,13 +38,160 @@ bun install
 
 ## Running the Supervisor
 
-Start the API server:
+### Option 1: Run Locally with Bun
+
+Start the API server directly:
 
 ```bash
 bun run src/index.ts
 ```
 
 The API will be available at `http://localhost:8080`
+
+### Option 2: Run with Docker/Podman (Recommended for Production)
+
+The supervisor can run as a containerized service using the **docker-out-of-docker (DooD)** pattern. The containerized supervisor uses the host's Docker/Podman daemon to launch worker containers.
+
+#### Prerequisites for Containerized Deployment
+
+1. **Docker or Podman** installed and running on the host
+2. **Worker image built** on the host:
+   ```bash
+   # Navigate to worker directory
+   cd ../worker
+
+   # Build with Docker
+   docker build -t aa-worker:latest .
+
+   # Or build with Podman
+   podman build -t aa-worker:latest .
+   ```
+
+3. **Storage directory** created on the host:
+   ```bash
+   # Mac (use /Users, NOT /tmp - see note below)
+   mkdir -p ~/aa-storage
+   chmod 755 ~/aa-storage
+
+   # Linux
+   mkdir -p /var/lib/aa-storage
+   chmod 755 /var/lib/aa-storage
+   ```
+
+   **⚠️ Mac + Podman Users:** Do NOT use `/tmp` for storage! The VirtioFS filesystem on Mac has SELinux labeling issues that prevent the non-root `runner` user in worker containers from accessing files. Always use a path under `/Users` (e.g., `/Users/yourname/aa-storage`).
+
+#### Configuration
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` for your platform:
+
+   **Mac + Podman (with SSH tunnel):**
+   ```bash
+   DOCKER_SOCKET_PATH=/Users/yourname/podman/podman.sock
+   AA_STORAGE_PATH=/Users/yourname/aa-storage
+   DEBUG_UI=true
+   ```
+   ⚠️ **Important:** Do NOT use `/tmp` - use `/Users/yourname/aa-storage` instead
+
+   **Mac + Docker Desktop:**
+   ```bash
+   DOCKER_SOCKET_PATH=/var/run/docker.sock
+   AA_STORAGE_PATH=/Users/yourname/aa-storage
+   DEBUG_UI=true
+   ```
+
+   **Linux + Docker:**
+   ```bash
+   DOCKER_SOCKET_PATH=/var/run/docker.sock
+   AA_STORAGE_PATH=/var/lib/aa-storage
+   DEBUG_UI=true
+   ```
+
+   **Linux + Podman (rootless):**
+   ```bash
+   DOCKER_SOCKET_PATH=/run/user/1000/podman/podman.sock
+   AA_STORAGE_PATH=$HOME/.local/share/aa-storage
+   DEBUG_UI=true
+   ```
+
+#### Build and Run
+
+**Using Docker Compose:**
+```bash
+docker compose up --build
+```
+
+**Using Podman Compose:**
+```bash
+podman-compose up --build
+```
+
+**Run in detached mode:**
+```bash
+docker compose up -d --build
+# Or
+podman-compose up -d --build
+```
+
+#### Verify the Deployment
+
+1. Check container status:
+   ```bash
+   docker ps
+   # Or
+   podman ps
+   ```
+
+2. View logs:
+   ```bash
+   docker compose logs -f supervisor
+   # Or
+   podman-compose logs -f supervisor
+   ```
+
+3. Test the API:
+   ```bash
+   curl http://localhost:8080/debug
+   ```
+
+#### How the DooD Pattern Works
+
+1. **Socket Mount**: The host's Docker/Podman socket is mounted into the supervisor container at `/var/run/docker.sock`
+2. **Storage Mount**: The storage directory (e.g., `/Users/yourname/aa-storage` on Mac, `/var/lib/aa-storage` on Linux) is mounted at the **SAME PATH** in both host and container
+3. **Path Consistency**: When the supervisor tells the Docker daemon to mount `/Users/yourname/aa-storage/session-123/job-456` into a worker container, the daemon finds this path on the host
+4. **Sibling Containers**: Worker containers are siblings to the supervisor container, not children (they share the host's daemon)
+
+#### Security Considerations
+
+**⚠️ Important:** Mounting the Docker socket gives the supervisor container full control over the Docker daemon. This is necessary for the DooD pattern but has security implications:
+
+- The container can launch, stop, and manage any containers on the host
+- The container can access all Docker resources
+- Only run trusted code in the supervisor
+- Consider using a Docker socket proxy with access controls for production deployments
+- Ensure the supervisor container is kept up-to-date with security patches
+
+#### Troubleshooting
+
+**Container can't connect to Docker daemon:**
+- Verify `DOCKER_SOCKET_PATH` in `.env` points to the correct socket
+- Check socket permissions: `ls -l ${DOCKER_SOCKET_PATH}`
+- For Podman on Mac, ensure SSH tunnel is active
+
+**Worker containers can't access workspace files:**
+- Verify `AA_STORAGE_PATH` is the same in both host and container
+- Check directory permissions: `ls -ld ${AA_STORAGE_PATH}`
+- Ensure the path exists on the host before starting
+- **Mac + Podman:** Make sure you're NOT using `/tmp` - use `/Users/yourname/aa-storage` instead
+- **Mac + Podman:** VirtioFS in `/tmp` has SELinux issues preventing non-root access
+
+**Worker image not found:**
+- Build the worker image on the host: `docker build -t aa-worker:latest ../worker`
+- Verify with: `docker images | grep aa-worker`
 
 ## API Endpoints
 
