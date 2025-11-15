@@ -1,0 +1,33 @@
+services:
+  supervisor:
+    image: aa-supervisor:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aa-supervisor
+    ports:
+      - "8080:8080"
+    environment:
+      # Docker/Podman socket path inside the container
+      - DOCKER_SOCKET_PATH=/var/run/docker.sock
+      # Storage path - MUST match the host mount path
+      - AA_STORAGE_PATH=${AA_STORAGE_PATH}
+      # Enable debug UI
+      - DEBUG_UI=${DEBUG_UI:-true}
+    volumes:
+      # Mount Docker/Podman socket for docker-out-of-docker pattern
+      # This allows the supervisor to launch sibling containers
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+      # Mount storage directory at THE SAME PATH in both host and container
+      # This is critical: when supervisor tells Docker daemon to mount
+      # ${AA_STORAGE_PATH}/session-123/job-456, the daemon needs to find
+      # this path on the host filesystem
+      - ${AA_STORAGE_PATH}:${AA_STORAGE_PATH}
+    security_opt:
+      # Disable SELinux labeling for Mac + Podman compatibility
+      # Prevents "statfs operation not supported" errors with SSH-forwarded sockets
+      - label=disable
+    restart: unless-stopped
+    # Run with network access (supervisor needs to expose API)
+    network_mode: bridge

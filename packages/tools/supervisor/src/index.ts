@@ -1,12 +1,23 @@
-// server.js
 import Fastify from "fastify";
 import Docker from "dockerode";
-import { writeFile, readdir } from "node:fs/promises";
 import path from "path";
-import { mkdir, chmod } from "fs/promises";
 import { nanoid } from "nanoid";
 import process from "node:process";
-import os from "node:os";
+import {
+	ToolRequestSchema,
+	RunRequestSchema,
+	type ToolResponse,
+	type RunResponse,
+} from "@any-agent/core/schemas";
+import {
+	getArtifactPath,
+	createWorkspace,
+	listWorkspaceFiles,
+	categorizeArtifacts,
+} from "@any-agent/core/storage";
+import { ToolRegistry } from "./tools/tool-handler.js";
+import { CodeExecutionTool } from "./tools/code-execution.js";
+import { DocumentConverterTool } from "./tools/document-converter.js";
 
 const docker = new Docker({
 	// socketPath: path.join(os.homedir(), "podman/podman.sock"),
@@ -18,89 +29,260 @@ docker.version().then(console.log).catch((e) => {
 	process.exit(-1);
 });
 
+// Tool registry - register all available tools
+const toolRegistry = new ToolRegistry();
+toolRegistry.register(new CodeExecutionTool(docker));
+toolRegistry.register(new DocumentConverterTool(docker));
+
+console.log("Registered tools:", toolRegistry.getToolTypes().join(", "));
+
 // Fastify server instance
 const fastify = Fastify({ logger: true });
 
-fastify.post("/run", async (request, reply) => {
-	const { language, code, filename = "script.js" } = request.body || {};
-	if (!code) {
-		reply.code(400).send({ error: "Missing 'code' field in body" });
+// Debug UI routes (only if DEBUG_UI env var is set)
+if (process.env.DEBUG_UI === "true") {
+	// GET /debug - Debug landing page listing all tools
+	fastify.get("/debug", async (request, reply) => {
+		const debugIndexPath = path.join(import.meta.dir, "debug", "index.html");
+		const debugIndexHtml = await Bun.file(debugIndexPath).text();
+		reply.type("text/html").send(debugIndexHtml);
+	});
+
+	// GET /debug/:toolName - Tool-specific debug UI
+	fastify.get("/debug/:toolName", async (request, reply) => {
+		const { toolName } = request.params as { toolName: string };
+		const debugToolPath = path.join(import.meta.dir, "debug", `${toolName}.html`);
+
+		const debugToolFile = Bun.file(debugToolPath);
+		const exists = await debugToolFile.exists();
+
+		if (!exists) {
+			reply.code(404).send({
+				error: "Debug UI not found for this tool",
+				availableTools: toolRegistry.getToolTypes()
+			});
+			return;
+		}
+
+		const debugToolHtml = await debugToolFile.text();
+		reply.type("text/html").send(debugToolHtml);
+	});
+
+	console.log("Debug UI enabled:");
+	console.log("  - Landing page: /debug");
+	console.log("  - Code execution: /debug/code-execution");
+	console.log("  - Document converter: /debug/document-converter");
+}
+
+// POST /tools/execute - Execute any registered tool
+fastify.post("/tools/execute", async (request, reply) => {
+	// Validate request body
+	const parseResult = ToolRequestSchema.safeParse(request.body);
+
+	if (!parseResult.success) {
+		reply.code(400).send({
+			error: "Invalid request body",
+			details: parseResult.error.issues,
+		});
+		return;
+	}
+
+	const toolRequest = parseResult.data;
+	const { sessionId } = toolRequest;
+	const toolType = toolRequest.tool;
+
+	// Find the appropriate tool handler
+	const handler = toolRegistry.get(toolType);
+	if (!handler) {
+		reply.code(400).send({
+			error: `Unknown tool type: ${toolType}`,
+			availableTools: toolRegistry.getToolTypes(),
+		});
 		return;
 	}
 
 	const id = nanoid(6);
-	const baseDir = path.join(os.homedir(), ".aa-storage");
-	const workDir = path.join(baseDir, `job-${id}`);
-	console.log("processing job: ", workDir)
-	await mkdir(workDir, { recursive: true });
-	await chmod(workDir, 0o755);
+	const workDir = await createWorkspace(sessionId, id);
+	console.log(`Processing ${toolType} job:`, workDir);
 
-	const scriptPath = path.join(workDir, filename);
-	await writeFile(scriptPath, code);
-
-	const command = getRunCommand(language, filename);
-
-	// Podman container configuration (Docker-compatible)
-	const container = await docker.createContainer({
-		Image: "aa-worker:latest", // built runtime image
-		Cmd: ["bash", "-c", command],
-		WorkingDir: "/workspace",
-		Volumes: { "/workspace": {} },
-		HostConfig: {
-			Binds: [`${workDir}:/workspace:Z`],
-			NetworkMode: "none", // isolation
-			AutoRemove: true,
-			Memory: 512 * 1024 * 1024, // 512MB limit
-			PidsLimit: 128,
-			CpuQuota: 50000, // ~50% single core
-		},
-	});
-
-	const logs = [];
-	const stream = await container.attach({
-		stream: true,
-		stdout: true,
-		stderr: true,
-	});
-	stream.on("data", (chunk) => logs.push(chunk.toString()));
-
-	await container.start();
-	const result = await container.wait(); // waits for process to exit
-
-	const exitCode = result.StatusCode;
-	const combinedOutput = logs.join("");
-
-	// Gather artifacts (filenames only)
-	let artifacts = [];
 	try {
-		artifacts = await readdir(workDir);
+		// Execute the tool
+		const context = {
+			sessionId,
+			jobId: id,
+			workDir,
+			protocol: request.protocol || "http",
+			host: request.headers.host || "localhost:8080",
+			timeout: toolRequest.timeout,
+		};
+
+		const result = await handler.execute(toolRequest, context);
+
+		// Gather all files in workspace
+		const allFiles = await listWorkspaceFiles(workDir);
+
+		// Categorize artifacts into inputs and outputs
+		const { inputs: inputArtifacts, outputs: outputArtifacts } =
+			categorizeArtifacts(
+				allFiles,
+				result.inputFiles,
+				context.protocol,
+				context.host,
+				sessionId,
+				id
+			);
+
+		const response: ToolResponse = {
+			sessionId,
+			tool: toolType,
+			id,
+			exitCode: result.exitCode,
+			artifacts: {
+				inputs: inputArtifacts,
+				outputs: outputArtifacts,
+			},
+		};
+
+		reply.send(response);
 	} catch (err) {
 		fastify.log.error(err);
+		reply.code(500).send({
+			error: "Tool execution failed",
+			details: err instanceof Error ? err.message : String(err),
+		});
 	}
-
-	reply.send({
-		id,
-		exitCode,
-		output: combinedOutput,
-		artifacts,
-	});
 });
 
-function getRunCommand(lang, file) {
-	switch (lang) {
-		case "python":
-			return `python3 ${file}`;
-		case "node":
-			return `node ${file}`;
-		case "bun":
-			return `bun run ${file}`;
-		case "bash":
-		default:
-			return `bash ${file}`;
-	}
-}
+// GET /artifacts/:sessionId/:jobId/:filename - Download artifact
+fastify.get("/artifacts/:sessionId/:jobId/:filename", async (request, reply) => {
+	const { sessionId, jobId, filename } = request.params as {
+		sessionId: string;
+		jobId: string;
+		filename: string;
+	};
 
+	const artifactPath = getArtifactPath(sessionId, jobId, filename);
+
+	// Send file or 404 if not found
+	try {
+		const file = Bun.file(artifactPath);
+		const exists = await file.exists();
+
+		if (!exists) {
+			reply.code(404).send({ error: "Artifact not found" });
+			return;
+		}
+
+		reply.type(file.type || "application/octet-stream");
+		const bytes = await file.bytes();
+		reply.send(Buffer.from(bytes));
+	} catch (err) {
+		fastify.log.error(err);
+		reply.code(500).send({ error: "Failed to read artifact" });
+	}
+});
+
+// POST /run - Legacy endpoint for code execution (backward compatibility)
+fastify.post("/run", async (request, reply) => {
+	// Validate request body
+	console.log(request.body);
+	const parseResult = RunRequestSchema.safeParse(request.body);
+
+	if (!parseResult.success) {
+		reply.code(400).send({
+			error: "Invalid request body",
+			details: parseResult.error.issues,
+		});
+		return;
+	}
+
+	const { sessionId, language, code, filename, timeout } = parseResult.data;
+
+	// Convert to tool request format
+	const toolRequest = {
+		tool: "code_execution" as const,
+		sessionId,
+		language,
+		code,
+		filename,
+		timeout,
+	};
+
+	const handler = toolRegistry.get("code_execution");
+	if (!handler) {
+		reply.code(500).send({ error: "Code execution tool not available" });
+		return;
+	}
+
+	const id = nanoid(6);
+	const workDir = await createWorkspace(sessionId, id);
+	console.log("Processing code execution job:", workDir);
+
+	try {
+		const context = {
+			sessionId,
+			jobId: id,
+			workDir,
+			protocol: request.protocol || "http",
+			host: request.headers.host || "localhost:8080",
+			timeout,
+		};
+
+		const result = await handler.execute(toolRequest, context);
+
+		// Gather all files in workspace
+		const allFiles = await listWorkspaceFiles(workDir);
+
+		// Categorize artifacts into inputs and outputs
+		const { inputs: inputArtifacts, outputs: outputArtifacts } =
+			categorizeArtifacts(
+				allFiles,
+				result.inputFiles,
+				context.protocol,
+				context.host,
+				sessionId,
+				id
+			);
+
+		const response: RunResponse = {
+			sessionId,
+			id,
+			exitCode: result.exitCode,
+			artifacts: {
+				inputs: inputArtifacts,
+				outputs: outputArtifacts,
+			},
+		};
+
+		reply.send(response);
+	} catch (err) {
+		fastify.log.error(err);
+		reply.code(500).send({
+			error: "Code execution failed",
+			details: err instanceof Error ? err.message : String(err),
+		});
+	}
+});
+
+// Start the server
 fastify.listen({ port: 8080, host: "0.0.0.0" }).catch((err) => {
 	fastify.log.error(err);
 	process.exit(1);
 });
+
+// Graceful shutdown handling
+const shutdown = async (signal: string) => {
+	console.log(`\nReceived ${signal}, closing server gracefully...`);
+	try {
+		await fastify.close();
+		console.log("Server closed successfully");
+		process.exit(0);
+	} catch (err) {
+		console.error("Error during shutdown:", err);
+		process.exit(1);
+	}
+};
+
+// Listen for termination signals
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
