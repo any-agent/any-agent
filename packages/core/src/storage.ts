@@ -1,7 +1,7 @@
 import path from "path";
 import os from "node:os";
 import process from "node:process";
-import { mkdir, chmod, readdir, writeFile } from "fs/promises";
+import { mkdir, chmod, readdir, writeFile, stat, chown } from "fs/promises";
 
 /**
  * Get the base storage directory path
@@ -34,12 +34,57 @@ export function getJobWorkDir(sessionId: string, jobId: string): string {
 }
 
 /**
+ * Get the uid/gid of the storage directory owner
+ * This is used to ensure files created by root match the ownership of the storage directory
+ */
+async function getStorageOwner(): Promise<{ uid: number; gid: number } | null> {
+	try {
+		const baseDir = getBaseStorageDir();
+		// Create base directory if it doesn't exist
+		await mkdir(baseDir, { recursive: true });
+		const stats = await stat(baseDir);
+		return { uid: stats.uid, gid: stats.gid };
+	} catch (err) {
+		console.error("Error getting storage directory owner:", err);
+		return null;
+	}
+}
+
+/**
+ * Chown a file or directory to match the storage directory owner
+ * Only performs chown if running as root (uid 0)
+ */
+async function chownToStorageOwner(targetPath: string): Promise<void> {
+	// Only chown if running as root
+	if (process.getuid && process.getuid() !== 0) {
+		return;
+	}
+
+	const owner = await getStorageOwner();
+	if (owner) {
+		try {
+			await chown(targetPath, owner.uid, owner.gid);
+		} catch (err) {
+			console.error(`Error chowning ${targetPath}:`, err);
+		}
+	}
+}
+
+/**
  * Create a workspace directory for a job
  */
 export async function createWorkspace(sessionId: string, jobId: string): Promise<string> {
+	const sessionDir = getSessionDir(sessionId);
 	const workDir = getJobWorkDir(sessionId, jobId);
+
+	// Create directories
 	await mkdir(workDir, { recursive: true });
 	await chmod(workDir, 0o755);
+
+	// Chown session and job directories to match storage owner (if running as root)
+	await chownToStorageOwner(sessionDir);
+	await chownToStorageOwner(workDir);
+
 	return workDir;
 }
 
@@ -53,6 +98,10 @@ export async function writeWorkspaceFile(
 ): Promise<string> {
 	const filePath = path.join(workDir, filename);
 	await writeFile(filePath, content);
+
+	// Chown file to match storage owner (if running as root)
+	await chownToStorageOwner(filePath);
+
 	return filePath;
 }
 
