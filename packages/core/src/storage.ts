@@ -1,7 +1,7 @@
 import path from "path";
 import os from "node:os";
 import process from "node:process";
-import { mkdir, chmod, readdir, writeFile } from "fs/promises";
+import { mkdir, chmod, readdir } from "fs/promises";
 
 /**
  * Get the base storage directory path
@@ -52,7 +52,8 @@ export async function writeWorkspaceFile(
 	content: string | Buffer
 ): Promise<string> {
 	const filePath = path.join(workDir, filename);
-	await writeFile(filePath, content);
+	const file = Bun.file(filePath);
+	await Bun.write(file, content);
 	return filePath;
 }
 

@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:"
   }
 }
