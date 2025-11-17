@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText, stepCountIs } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -18,7 +18,7 @@ interface AgentConfig {
 	/** System prompt for the agent */
 	systemPrompt?: string;
 	/** Maximum number of tool call iterations */
-	maxSteps?: number;
+	maxSteps: number;
 	/** Base URL for OpenAI-compatible endpoints (e.g., LM Studio) */
 	baseURL?: string;
 	/** API key for OpenAI-compatible endpoints (optional for local models) */
@@ -95,6 +95,7 @@ export async function runAgent(
 			tools,
 			system: systemPrompt,
 			prompt: userPrompt,
+			stopWhen: stepCountIs(config.maxSteps),
 			onStepFinish: config.debug ? ({ text, toolCalls, toolResults, finishReason, usage }) => {
 				console.log("🔄 Step Finished");
 				console.log("─".repeat(80));
@@ -139,17 +140,19 @@ export async function runAgent(
 		console.log(`Steps: ${result.steps.length}`);
 
 		// Display tool usage
-		for (const step of result.steps) {
-			if (step.toolResults && step.toolResults.length > 0) {
-				for (const toolCall of step.toolResults) {
-					console.log(`\nTool: ${toolCall.toolName}`);
-					console.log(`Input: ${JSON.stringify(toolCall.input, null, 2)}`);
-					if (step.toolResults) {
-						const toolResult = step.toolResults.find(
-							(r) => r.toolCallId === toolCall.toolCallId,
-						);
-						if (toolResult) {
-							console.log(`Output: ${JSON.stringify(toolResult.output, null, 2)}`);
+		if (config.debug) {
+			for (const step of result.steps) {
+				if (step.toolResults && step.toolResults.length > 0) {
+					for (const toolCall of step.toolResults) {
+						console.log(`\nTool: ${toolCall.toolName}`);
+						console.log(`Input: ${JSON.stringify(toolCall.input, null, 2)}`);
+						if (step.toolResults) {
+							const toolResult = step.toolResults.find(
+								(r) => r.toolCallId === toolCall.toolCallId,
+							);
+							if (toolResult) {
+								console.log(`Output: ${JSON.stringify(toolResult.output, null, 2)}`);
+							}
 						}
 					}
 				}
@@ -170,6 +173,8 @@ export async function runAgent(
 async function main() {
 	// Get configuration from environment or use defaults
 	const provider = (process.env.AI_PROVIDER as "anthropic" | "openai" | "openai-compatible") || "anthropic";
+
+	const maxSteps = process.env.MAX_STEPS ? +process.env.MAX_STEPS : 5;
 
 	// Determine default model based on provider
 	let defaultModel: string;
@@ -212,6 +217,7 @@ async function main() {
 		supervisorUrl,
 		baseURL,
 		apiKey,
+		maxSteps,
 		debug: debugFlag,
 	});
 }
