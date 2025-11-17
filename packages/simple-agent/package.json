@@ -1,0 +1,31 @@
+{
+  "name": "@any-agent/simple-agent",
+  "version": "0.0.1",
+  "description": "A simple LLM agent loop using Vercel AI SDK with @any-agent tools",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "biome lint"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "catalog:",
+    "@ai-sdk/openai": "catalog:",
+    "@ai-sdk/openai-compatible": "catalog:",
+    "@any-agent/core": "workspace:*",
+    "ai": "catalog:",
+    "nanoid": "^5.1.6",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
