@@ -106,7 +106,7 @@ function createToolExecutor(config: ToolsConfig, toolType: string) {
 		}
 
 		// Format the response with stdout/stderr if available
-		const output: Record<string, any> = {
+		const output: Record<string, unknown> = {
 			exitCode: result.exitCode,
 			success: result.exitCode === 0,
 			artifacts: result.artifacts,

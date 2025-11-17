@@ -110,7 +110,7 @@ export async function runAgent(
 					for (const toolCall of toolCalls) {
 						console.log(`\n  Tool: ${toolCall.toolName}`);
 						console.log(`  ID: ${toolCall.toolCallId}`);
-						console.log(`  Arguments: ${JSON.stringify((toolCall as any).args, null, 2)}`);
+						console.log(`  Arguments: ${JSON.stringify(toolCall.input, null, 2)}`);
 					}
 				}
 
@@ -118,7 +118,7 @@ export async function runAgent(
 					console.log("\n📦 Tool Results:");
 					for (const result of toolResults) {
 						console.log(`\n  Tool Call ID: ${result.toolCallId}`);
-						console.log(`  Result: ${JSON.stringify((result as any).result, null, 2)}`);
+						console.log(`  Result: ${JSON.stringify(result.output, null, 2)}`);
 					}
 				}
 
@@ -138,26 +138,6 @@ export async function runAgent(
 		console.log(result.text);
 		console.log("\n=== Tool Calls ===");
 		console.log(`Steps: ${result.steps.length}`);
-
-		// Display tool usage
-		if (config.debug) {
-			for (const step of result.steps) {
-				if (step.toolResults && step.toolResults.length > 0) {
-					for (const toolCall of step.toolResults) {
-						console.log(`\nTool: ${toolCall.toolName}`);
-						console.log(`Input: ${JSON.stringify(toolCall.input, null, 2)}`);
-						if (step.toolResults) {
-							const toolResult = step.toolResults.find(
-								(r) => r.toolCallId === toolCall.toolCallId,
-							);
-							if (toolResult) {
-								console.log(`Output: ${JSON.stringify(toolResult.output, null, 2)}`);
-							}
-						}
-					}
-				}
-			}
-		}
 
 		console.log(`\n=== Usage ===`);
 		console.log(`Total tokens: ${result.usage.totalTokens}`);
