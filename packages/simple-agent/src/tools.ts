@@ -14,30 +14,36 @@ export interface ToolsConfig {
 	debug?: boolean;
 }
 
+interface AvailableTools {
+	[name: string]: {
+		description: string;
+		inputSchema: z.ZodType;
+		execute: (inputs: Record<string, unknown>) => Promise<Record<string, unknown>>
+	}
+}
+
 /**
  * Response from /tools endpoint
  */
 interface ToolsListResponse {
-	tools: Array<{
-		toolType: string;
-		name: string;
+	[name: string]: {
 		description: string;
-		parameters: Record<string, any>;
-	}>;
+		// parameters: Record<string, any>;
+	};
 }
 
 /**
  * Map of tool types to their input schemas
  */
-const TOOL_SCHEMAS: Record<string, z.ZodSchema> = {
-	code_execution: CodeExecutionInputSchema.omit({ tool: true, sessionId: true }),
-	document_converter: DocumentConverterInputSchema.omit({ tool: true, sessionId: true }),
+const TOOL_SCHEMAS: Record<string, z.ZodType> = {
+	code_execution: CodeExecutionInputSchema,
+	document_converter: DocumentConverterInputSchema,
 };
 
 /**
  * Fetch available tools from the supervisor
  */
-async function fetchAvailableTools(supervisorUrl: string): Promise<ToolsListResponse["tools"]> {
+async function fetchAvailableTools(supervisorUrl: string): Promise<ToolsListResponse> {
 	try {
 		const response = await fetch(`${supervisorUrl}/tools`);
 
@@ -46,7 +52,7 @@ async function fetchAvailableTools(supervisorUrl: string): Promise<ToolsListResp
 		}
 
 		const data = (await response.json()) as ToolsListResponse;
-		return data.tools;
+		return data;
 	} catch (error) {
 		console.error("Failed to fetch tools from supervisor:", error);
 		throw new Error(
@@ -60,7 +66,7 @@ async function fetchAvailableTools(supervisorUrl: string): Promise<ToolsListResp
  * Create a tool executor for a given tool type
  */
 function createToolExecutor(config: ToolsConfig, toolType: string) {
-	return async (params: Record<string, any>) => {
+	return async (params: Record<string, unknown>) => {
 		const requestBody = {
 			tool: toolType,
 			sessionId: config.sessionId,
@@ -124,31 +130,24 @@ function createToolExecutor(config: ToolsConfig, toolType: string) {
 		const parts: string[] = [];
 
 		if (result.exitCode === 0) {
-			parts.push("Tool executed successfully");
+			if (result.stdout) {
+				parts.push(result.stdout);
+			} else {
+				parts.push("Tool executed successfully");
+			}
 		} else {
-			parts.push(`Tool execution failed (exit code: ${result.exitCode})`);
-		}
-
-		if (result.stdout) {
-			parts.push(`\nOutput:\n${result.stdout}`);
-			if (result.stdoutTrimmed) {
-				parts.push("(output was trimmed to 10KB)");
+			parts.push(`Failed (exit code: ${result.exitCode})\n`);
+			if (result.stderr) {
+				parts.push(result.stderr)
 			}
 		}
 
-		if (result.stderr) {
-			parts.push(`\nErrors:\n${result.stderr}`);
-			if (result.stderrTrimmed) {
-				parts.push("(errors were trimmed to 10KB)");
-			}
-		}
+		output.result = parts.join("\n");
 
-		const outputFiles = Object.keys(result.artifacts.outputs);
-		if (outputFiles.length > 0) {
-			parts.push(`\nGenerated files: ${outputFiles.join(", ")}`);
+		if (config.debug) {
+			console.log(`\nToolcall reply to LLM:`);
+			console.log(JSON.stringify(output));
 		}
-
-		output.message = parts.join("\n");
 
 		return output;
 	};
@@ -162,21 +161,21 @@ export async function createTools(config: ToolsConfig) {
 	const availableTools = await fetchAvailableTools(config.supervisorUrl);
 
 	// Build the tools object dynamically
-	const tools: Record<string, any> = {};
+	const tools: AvailableTools = {};
 
-	for (const tool of availableTools) {
+	for (const [tool, { description }] of Object.entries(availableTools)) {
 		// Get the schema for this tool type
-		const inputSchema = TOOL_SCHEMAS[tool.toolType];
+		const inputSchema = TOOL_SCHEMAS[tool];
 
 		if (!inputSchema) {
-			console.warn(`No schema found for tool type: ${tool.toolType}, skipping...`);
+			console.warn(`No schema found for tool type: ${tool}, skipping...`);
 			continue;
 		}
 
-		tools[tool.toolType] = {
-			description: tool.description,
+		tools[tool] = {
+			description,
 			inputSchema,
-			execute: createToolExecutor(config, tool.toolType),
+			execute: createToolExecutor(config, tool),
 		};
 	}
 

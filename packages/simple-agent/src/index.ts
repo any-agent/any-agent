@@ -140,16 +140,16 @@ export async function runAgent(
 
 		// Display tool usage
 		for (const step of result.steps) {
-			if (step.toolCalls && step.toolCalls.length > 0) {
-				for (const toolCall of step.toolCalls) {
+			if (step.toolResults && step.toolResults.length > 0) {
+				for (const toolCall of step.toolResults) {
 					console.log(`\nTool: ${toolCall.toolName}`);
-					console.log(`Args: ${JSON.stringify((toolCall as any).args, null, 2)}`);
+					console.log(`Input: ${JSON.stringify(toolCall.input, null, 2)}`);
 					if (step.toolResults) {
 						const toolResult = step.toolResults.find(
 							(r) => r.toolCallId === toolCall.toolCallId,
 						);
 						if (toolResult) {
-							console.log(`Result: ${JSON.stringify((toolResult as any).result, null, 2)}`);
+							console.log(`Output: ${JSON.stringify(toolResult.output, null, 2)}`);
 						}
 					}
 				}
