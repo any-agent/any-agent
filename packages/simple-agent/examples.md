@@ -2,6 +2,24 @@
 
 This file contains example prompts and use cases for the simple agent.
 
+## Debug Mode
+
+Add `--debug` or `-d` to any command to see all messages:
+
+```bash
+bun run src/index.ts --debug "Your prompt"
+```
+
+This shows:
+- System and user messages
+- LLM reasoning at each step
+- Tool calls with full arguments
+- HTTP requests/responses to supervisor
+- Tool execution results
+- Token usage
+
+Perfect for understanding how the agent works and debugging issues!
+
 ## Quick Start with LM Studio
 
 1. **Install LM Studio**: Download from [lmstudio.ai](https://lmstudio.ai/)
@@ -14,6 +32,7 @@ This file contains example prompts and use cases for the simple agent.
    AI_MODEL=your-model-name
    ```
 5. **Run**: `bun run src/index.ts "Your prompt"`
+6. **Debug**: `bun run src/index.ts --debug "Your prompt"` (to see all messages)
 
 ## Code Execution Examples
 

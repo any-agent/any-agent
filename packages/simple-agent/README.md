@@ -14,9 +14,11 @@ This package provides a minimal agent loop that:
   - **LM Studio** (local, privacy-focused)
   - **Ollama** (local, open-source)
   - Any OpenAI-compatible API
-- **Provides built-in tools** for code execution and document conversion
-- **Extensible architecture** - easily add new tools
+- **Dynamic tool discovery** - Automatically discovers tools from the supervisor at runtime
+- **Provides built-in tools** - Code execution and document conversion (via supervisor)
+- **Extensible architecture** - Add new tools by only modifying the supervisor
 - **Run locally** - No API costs, complete privacy with local models
+- **Rich output** - Includes stdout/stderr from tool execution for better debugging
 
 ## Features
 
@@ -138,6 +140,31 @@ bun run src/index.ts "Calculate the sum of squares of the first 20 even numbers 
 bun run src/index.ts "Convert the provided PDF to markdown"
 ```
 
+### Debug Mode
+
+Enable debug logging to see all messages between user/agent/tools:
+
+```bash
+# Using --debug flag
+bun run src/index.ts --debug "Your prompt here"
+
+# Using -d shorthand
+bun run src/index.ts -d "Calculate factorial of 5"
+```
+
+Debug mode shows:
+- 📝 System prompt sent to the LLM
+- 💬 User messages
+- 💭 LLM responses at each step
+- 🔧 Tool calls with full arguments
+- 🌐 HTTP requests to the supervisor
+- ✅ HTTP responses from the supervisor
+- 📦 Tool results returned to the LLM
+- 🏁 Finish reasons
+- 📊 Token usage per step
+
+This is extremely helpful for debugging issues, understanding the agent's reasoning, and seeing exactly what data flows between components.
+
 ### Programmatic Usage
 
 ```typescript
@@ -149,6 +176,7 @@ await runAgent("Your prompt here", {
   supervisorUrl: "http://localhost:8080",
   maxSteps: 5,
   systemPrompt: "Custom system prompt...",
+  debug: true, // Enable debug logging
 });
 ```
 
@@ -168,80 +196,137 @@ await runAgent("Your prompt here", {
 │              │                      │
 │              ↓                      │
 │  ┌──────────────────────────────┐  │
-│  │   Tool Definitions           │  │
-│  │   - code_execution           │  │
-│  │   - document_converter       │  │
+│  │   Dynamic Tool Loading       │  │
+│  │   - Fetches from supervisor  │  │
+│  │   - Auto-discovers new tools │  │
 │  └──────────────────────────────┘  │
 └─────────────────────────────────────┘
               │
-              │ HTTP
+              │ HTTP (GET /tools, POST /tools/execute)
               ↓
 ┌─────────────────────────────────────┐
 │   @any-agent/tools-supervisor       │
+│   - Exposes available tools via API │
 │   - Runs tools in Docker containers │
 │   - Manages artifacts/files         │
-│   - Provides /tools/execute API     │
+│   - Returns stdout/stderr output    │
 └─────────────────────────────────────┘
 ```
 
 ### Flow
 
-1. User provides a prompt
-2. Agent sends prompt + tool definitions to LLM
-3. LLM decides to call tools (if needed)
-4. Agent executes tools via HTTP request to supervisor
-5. Tools run in sandboxed Docker containers
-6. Results returned to LLM
-7. Steps 3-6 repeat until task is complete
-8. Final response returned to user
+1. Agent starts up and fetches available tools from supervisor (`GET /tools`)
+2. Tool definitions are dynamically loaded based on supervisor's response
+3. User provides a prompt
+4. Agent sends prompt + tool definitions to LLM
+5. LLM decides to call tools (if needed)
+6. Agent executes tools via HTTP request to supervisor (`POST /tools/execute`)
+7. Tools run in sandboxed Docker containers
+8. Results (including stdout/stderr) returned to LLM
+9. Steps 5-8 repeat until task is complete
+10. Final response returned to user
+
+### Dynamic Tool Discovery
+
+**The agent automatically discovers available tools from the supervisor at startup.** This means:
+
+- ✅ Tool descriptions fetched dynamically from supervisor's `/tools` endpoint
+- ✅ Tool schemas imported from `@any-agent/core/schemas` for validation
+- ✅ Tools are always in sync with what the supervisor supports
+- ✅ Single source of truth for tool schemas (the core package)
+- ✅ Reduced code duplication and maintenance burden
+
+**How it works:**
+1. Agent fetches available tools from supervisor (`GET /tools`)
+2. Agent matches each tool type to its corresponding schema from `@any-agent/core/schemas`
+3. Agent builds tool definitions with proper validation and descriptions
+4. If a tool is added to both the supervisor and core schemas, it's automatically available
 
 ## Extending with New Tools
 
-### 1. Define Your Tool in `src/tools.ts`
+To add a new tool, you need to update three places:
 
-```typescript
-export const myCustomTool = (config: ToolsConfig) =>
-  tool({
-    description: "What your tool does",
-    parameters: z.object({
-      input: z.string().describe("Input parameter description"),
-    }),
-    execute: async ({ input }) => {
-      const response = await fetch(`${config.supervisorUrl}/tools/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tool: "my_custom_tool",
-          sessionId: config.sessionId,
-          input,
-          timeout: 30,
-        }),
-      });
+### Steps to Add a New Tool
 
-      if (!response.ok) {
-        throw new Error(`Tool execution failed: ${await response.text()}`);
-      }
+1. **Define the Schema in Core**
 
-      return await response.json();
-    },
-  });
-```
+   Add your tool's input schema to `@any-agent/core/src/schemas.ts`:
 
-### 2. Add to Tool Registry
+   ```typescript
+   // In BaseToolRequestSchema section
+   export const MyToolInputSchema = BaseToolRequestSchema.extend({
+     tool: z.literal("my_tool"),
+     input: z.string().describe("Description of the input"),
+     // ... other tool-specific parameters
+   });
 
-```typescript
-export function createTools(config: ToolsConfig) {
-  return {
-    code_execution: codeExecutionTool(config),
-    document_converter: documentConverterTool(config),
-    my_custom_tool: myCustomTool(config), // Add here
-  };
-}
-```
+   // Add to the discriminated union
+   export const ToolRequestSchema = z.discriminatedUnion("tool", [
+     CodeExecutionInputSchema,
+     DocumentConverterInputSchema,
+     MyToolInputSchema, // Add your schema here
+   ]);
+   ```
 
-### 3. Implement Tool Handler in Supervisor
+2. **Implement the Tool Handler in the Supervisor**
 
-See `@any-agent/tools-supervisor` documentation for implementing the backend tool handler.
+   Create a new tool handler class in `@any-agent/tools-supervisor/src/tools/`:
+
+   ```typescript
+   import type { ToolHandler, ToolExecutionContext, ToolExecutionResult } from "./tool-handler.js";
+   import { MyToolInputSchema } from "@any-agent/core/schemas";
+
+   export class MyToolHandler implements ToolHandler<MyToolInput> {
+     readonly toolType = "my_tool";
+     readonly name = "My Tool";
+     readonly description = "What this tool does and when to use it";
+     readonly inputSchema = MyToolInputSchema;
+
+     async execute(input: MyToolInput, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+       // Implement your tool logic here
+       return {
+         exitCode: 0,
+         inputFiles: new Set(),
+         stdout: "Tool output here",
+       };
+     }
+   }
+   ```
+
+   Then register it in `@any-agent/tools-supervisor/src/index.ts`:
+
+   ```typescript
+   import { MyToolHandler } from "./tools/my-tool.js";
+   toolRegistry.register(new MyToolHandler());
+   ```
+
+3. **Add Schema Mapping in Simple Agent**
+
+   In `@any-agent/simple-agent/src/tools.ts`, add your schema to the `TOOL_SCHEMAS` map:
+
+   ```typescript
+   import { MyToolInputSchema } from "@any-agent/core/schemas";
+
+   const TOOL_SCHEMAS: Record<string, z.ZodSchema> = {
+     code_execution: CodeExecutionInputSchema.omit({ tool: true, sessionId: true }),
+     document_converter: DocumentConverterInputSchema.omit({ tool: true, sessionId: true }),
+     my_tool: MyToolInputSchema.omit({ tool: true, sessionId: true }), // Add this
+   };
+   ```
+
+4. **Restart and Use**
+
+   ```bash
+   # Restart the supervisor
+   cd packages/tools/supervisor
+   bun run start
+
+   # Use your new tool
+   cd packages/simple-agent
+   bun run src/index.ts "Use my new tool to do something"
+   ```
+
+The agent will automatically discover the new tool from the supervisor and use the schema from the core package for validation!
 
 ## API Reference
 
@@ -260,6 +345,7 @@ Execute the agent with a given prompt.
   - `maxSteps` (optional) - Max tool calling iterations (default: 5)
   - `baseURL` (optional) - Base URL for OpenAI-compatible endpoints (e.g., "http://localhost:1234/v1")
   - `apiKey` (optional) - API key for the provider (not required for local models)
+  - `debug` (optional) - Enable debug logging to see all messages (default: false)
 
 **Returns:** Promise<void>
 

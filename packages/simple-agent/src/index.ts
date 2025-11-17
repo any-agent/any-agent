@@ -23,6 +23,8 @@ interface AgentConfig {
 	baseURL?: string;
 	/** API key for OpenAI-compatible endpoints (optional for local models) */
 	apiKey?: string;
+	/** Enable debug logging to see all messages */
+	debug?: boolean;
 }
 
 /**
@@ -42,7 +44,7 @@ export async function runAgent(
 	} else if (config.provider === "openai-compatible") {
 		// Create OpenAI-compatible client for LM Studio, Ollama, etc.
 		const openaiCompatible = createOpenAICompatible({
-			name: 'lm-studio',
+			name: 'lmstudio',
 			baseURL: config.baseURL || process.env.OPENAI_BASE_URL || "http://localhost:1234/v1",
 		});
 		model = openaiCompatible(config.model);
@@ -54,29 +56,81 @@ export async function runAgent(
 		model = openaiClient(config.model);
 	}
 
-	// Create tools with session context
-	const tools = createTools({
-		supervisorUrl: config.supervisorUrl,
-		sessionId,
-	});
-
 	console.log("\n=== Simple Agent ===");
 	console.log(`Session ID: ${sessionId}`);
 	console.log(`Model: ${config.provider}/${config.model}`);
 	if (config.baseURL) {
 		console.log(`Base URL: ${config.baseURL}`);
 	}
-	console.log(`Prompt: ${userPrompt}\n`);
+	console.log(`Supervisor: ${config.supervisorUrl}`);
+
+	// Fetch and create tools dynamically from the supervisor
+	console.log("\nFetching available tools...");
+	const tools = await createTools({
+		supervisorUrl: config.supervisorUrl,
+		sessionId,
+		debug: config.debug,
+	});
+
+	const toolNames = Object.keys(tools);
+	console.log(`Loaded ${toolNames.length} tools: ${toolNames.join(", ")}`);
+	console.log(`\nPrompt: ${userPrompt}\n`);
+
+	const systemPrompt = config.systemPrompt ||
+		"You are a helpful assistant with access to code execution and document conversion tools. Use these tools to help the user accomplish their tasks.";
+
+	if (config.debug) {
+		console.log("=== DEBUG MODE ENABLED ===\n");
+		console.log("📝 System Prompt:");
+		console.log(systemPrompt);
+		console.log("\n💬 User Message:");
+		console.log(userPrompt);
+		console.log("\n" + "=".repeat(80) + "\n");
+	}
 
 	try {
 		// Generate response with tool calling
 		const result = await generateText({
 			model,
 			tools,
-			system:
-				config.systemPrompt ||
-				"You are a helpful assistant with access to code execution and document conversion tools. Use these tools to help the user accomplish their tasks.",
+			system: systemPrompt,
 			prompt: userPrompt,
+			onStepFinish: config.debug ? ({ text, toolCalls, toolResults, finishReason, usage }) => {
+				console.log("🔄 Step Finished");
+				console.log("─".repeat(80));
+
+				if (text) {
+					console.log("\n💭 LLM Response:");
+					console.log(text);
+				}
+
+				if (toolCalls && toolCalls.length > 0) {
+					console.log("\n🔧 Tool Calls:");
+					for (const toolCall of toolCalls) {
+						console.log(`\n  Tool: ${toolCall.toolName}`);
+						console.log(`  ID: ${toolCall.toolCallId}`);
+						console.log(`  Arguments: ${JSON.stringify((toolCall as any).args, null, 2)}`);
+					}
+				}
+
+				if (toolResults && toolResults.length > 0) {
+					console.log("\n📦 Tool Results:");
+					for (const result of toolResults) {
+						console.log(`\n  Tool Call ID: ${result.toolCallId}`);
+						console.log(`  Result: ${JSON.stringify((result as any).result, null, 2)}`);
+					}
+				}
+
+				if (finishReason) {
+					console.log(`\n🏁 Finish Reason: ${finishReason}`);
+				}
+
+				if (usage) {
+					console.log(`\n📊 Token Usage: ${usage.totalTokens} tokens`);
+				}
+
+				console.log("\n" + "=".repeat(80) + "\n");
+			} : undefined,
 		});
 
 		console.log("=== Agent Response ===");
@@ -142,10 +196,15 @@ async function main() {
 		process.exit(1);
 	}
 
-	// Get user prompt from command line or use a default example
-	const userPrompt =
-		process.argv.slice(2).join(" ") ||
-		"Write a Python script that calculates the first 10 Fibonacci numbers and execute it";
+	// Parse command line arguments
+	const args = process.argv.slice(2);
+	const debugFlag = args.includes("--debug") || args.includes("-d");
+
+	// Remove debug flag from args to get the prompt
+	const promptArgs = args.filter(arg => arg !== "--debug" && arg !== "-d");
+	const userPrompt = promptArgs.length > 0
+		? promptArgs.join(" ")
+		: "Write a Python script that calculates the first 10 Fibonacci numbers and execute it";
 
 	await runAgent(userPrompt, {
 		provider,
@@ -153,6 +212,7 @@ async function main() {
 		supervisorUrl,
 		baseURL,
 		apiKey,
+		debug: debugFlag,
 	});
 }
 
