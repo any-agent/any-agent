@@ -1,5 +1,5 @@
 import type { ToolRequest } from "@any-agent/core/schemas";
-import type { ZodSchema } from "zod";
+import type { z } from "zod";
 
 /**
  * Context information passed to tool handlers
@@ -47,7 +47,7 @@ export interface ToolMetadata {
 	/**
 	 * Zod schema for the tool's input parameters
 	 */
-	inputSchema: ZodSchema;
+	inputSchema: z.ZodType;
 }
 
 /**
@@ -72,7 +72,7 @@ export interface ToolHandler<TInput extends ToolRequest = ToolRequest> {
 	/**
 	 * Zod schema for validating tool input
 	 */
-	readonly inputSchema: ZodSchema<TInput>;
+	readonly inputSchema: z.ZodType<TInput>;
 
 	/**
 	 * Execute the tool with the given input and context

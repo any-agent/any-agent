@@ -5,9 +5,8 @@ import { nanoid } from "nanoid";
 import process from "node:process";
 import {
 	ToolRequestSchema,
-	RunRequestSchema,
+	ToolRequestSchemaAgentParams,
 	type ToolResponse,
-	type RunResponse,
 } from "@any-agent/core/schemas";
 import {
 	getArtifactPath,
@@ -18,7 +17,7 @@ import {
 import { ToolRegistry } from "./tools/tool-handler.js";
 import { CodeExecutionTool } from "./tools/code-execution.js";
 import { DocumentConverterTool } from "./tools/document-converter.js";
-
+import z from "zod";
 const docker = new Docker({
 	// socketPath: path.join(os.homedir(), "podman/podman.sock"),
 	socketPath: process.env.DOCKER_SOCKET_PATH
@@ -42,7 +41,7 @@ const fastify = Fastify({ logger: true });
 // Debug UI routes (only if DEBUG_UI env var is set)
 if (process.env.DEBUG_UI === "true") {
 	// GET /debug - Debug landing page listing all tools
-	fastify.get("/debug", async (request, reply) => {
+	fastify.get("/debug", async (_, reply) => {
 		const debugIndexPath = path.join(import.meta.dir, "debug", "index.html");
 		const debugIndexHtml = await Bun.file(debugIndexPath).text();
 		reply.type("text/html").send(debugIndexHtml);
@@ -75,63 +74,46 @@ if (process.env.DEBUG_UI === "true") {
 }
 
 // GET /tools - List all available tools with their metadata
-fastify.get("/tools", async (request, reply) => {
+fastify.get("/tools", async (_, reply) => {
 	const tools = toolRegistry.getTools().map((tool) => {
-		// Extract parameter information from the Zod schema
-		const schema = tool.inputSchema as any;
-		const shape = schema.shape || {};
-		const parameters: Record<string, any> = {};
-
-		for (const [key, value] of Object.entries(shape)) {
-			const zodField = value as any;
-			const fieldDef = zodField._def || zodField.def || {};
-
-			parameters[key] = {
-				type: fieldDef.type || zodField.type || "unknown",
-				required: !zodField.isOptional?.(),
-				...(zodField.description && { description: zodField.description }),
-			};
-
-			// Add additional details based on type
-			if (fieldDef.type === "literal" && fieldDef.values) {
-				parameters[key].value = fieldDef.values[0];
-			} else if (fieldDef.type === "enum" || zodField.options) {
-				parameters[key].options = zodField.options;
-			} else if (fieldDef.type === "default") {
-				// For defaults, extract the actual default value
-				const defaultVal = fieldDef.defaultValue;
-				parameters[key].default = typeof defaultVal === "function" ? defaultVal() : defaultVal;
-				parameters[key].type = fieldDef.innerType?.type || fieldDef.innerType?._def?.type;
-			}
-		}
-
 		return {
 			toolType: tool.toolType,
-			name: tool.name,
 			description: tool.description,
-			parameters,
+			parameters: z.toJSONSchema(tool.inputSchema).properties,
 		};
-	});
+	}).reduce((acc, i) => {
+		const { toolType, description, parameters } = i;
+		acc[toolType] = { description, parameters };
+		return acc;
+	}, {} as Record<string, { description: string, parameters?: typeof z.core.JSONSchema }>);
 
-	reply.send({ tools });
+	reply.send(tools);
 });
 
 // POST /tools/execute - Execute any registered tool
 fastify.post("/tools/execute", async (request, reply) => {
 	// Validate request body
-	const parseResult = ToolRequestSchema.safeParse(request.body);
+	const parseToolParamsResult = ToolRequestSchema.safeParse(request.body);
+	const parseAgentParamsResult = ToolRequestSchemaAgentParams.safeParse(request.body);
 
-	if (!parseResult.success) {
+	if (!parseAgentParamsResult.success) {
 		reply.code(400).send({
-			error: "Invalid request body",
-			details: parseResult.error.issues,
+			error: "Invalid request body (agent params)",
+			details: parseAgentParamsResult.error.issues,
 		});
 		return;
 	}
 
-	const toolRequest = parseResult.data;
-	const { sessionId } = toolRequest;
-	const toolType = toolRequest.tool;
+	if (!parseToolParamsResult.success) {
+		reply.code(400).send({
+			error: "Invalid request body (tool params)",
+			details: parseToolParamsResult.error.issues,
+		});
+		return;
+	}
+
+	const toolRequest = parseToolParamsResult.data;
+	const { sessionId, timeout, tool: toolType } = parseAgentParamsResult.data;
 
 	// Find the appropriate tool handler
 	const handler = toolRegistry.get(toolType);
@@ -155,7 +137,7 @@ fastify.post("/tools/execute", async (request, reply) => {
 			workDir,
 			protocol: request.protocol || "http",
 			host: request.headers.host || "localhost:8080",
-			timeout: toolRequest.timeout,
+			timeout,
 		};
 
 		const result = await handler.execute(toolRequest, context);
@@ -225,92 +207,6 @@ fastify.get("/artifacts/:sessionId/:jobId/:filename", async (request, reply) => 
 	} catch (err) {
 		fastify.log.error(err);
 		reply.code(500).send({ error: "Failed to read artifact" });
-	}
-});
-
-// POST /run - Legacy endpoint for code execution (backward compatibility)
-fastify.post("/run", async (request, reply) => {
-	// Validate request body
-	console.log(request.body);
-	const parseResult = RunRequestSchema.safeParse(request.body);
-
-	if (!parseResult.success) {
-		reply.code(400).send({
-			error: "Invalid request body",
-			details: parseResult.error.issues,
-		});
-		return;
-	}
-
-	const { sessionId, language, code, filename, timeout } = parseResult.data;
-
-	// Convert to tool request format
-	const toolRequest = {
-		tool: "code_execution" as const,
-		sessionId,
-		language,
-		code,
-		filename,
-		timeout,
-	};
-
-	const handler = toolRegistry.get("code_execution");
-	if (!handler) {
-		reply.code(500).send({ error: "Code execution tool not available" });
-		return;
-	}
-
-	const id = nanoid(6);
-	const workDir = await createWorkspace(sessionId, id);
-	console.log("Processing code execution job:", workDir);
-
-	try {
-		const context = {
-			sessionId,
-			jobId: id,
-			workDir,
-			protocol: request.protocol || "http",
-			host: request.headers.host || "localhost:8080",
-			timeout,
-		};
-
-		const result = await handler.execute(toolRequest, context);
-
-		// Gather all files in workspace
-		const allFiles = await listWorkspaceFiles(workDir);
-
-		// Categorize artifacts into inputs and outputs
-		const { inputs: inputArtifacts, outputs: outputArtifacts } =
-			categorizeArtifacts(
-				allFiles,
-				result.inputFiles,
-				context.protocol,
-				context.host,
-				sessionId,
-				id
-			);
-
-		const response: RunResponse = {
-			sessionId,
-			id,
-			exitCode: result.exitCode,
-			artifacts: {
-				inputs: inputArtifacts,
-				outputs: outputArtifacts,
-			},
-			...(result.stdout && { stdout: result.stdout }),
-			...(result.stdoutTrimmed && { stdoutTrimmed: result.stdoutTrimmed }),
-			...(result.stderr && { stderr: result.stderr }),
-			...(result.stderrTrimmed && { stderrTrimmed: result.stderrTrimmed }),
-		};
-
-		reply.send(response);
-	} catch (err) {
-		fastify.log.error(err);
-		reply.code(500).send({
-			error: "Code execution failed",
-			details: err instanceof Error ? err.message : String(err),
-		});
 	}
 });
 

@@ -16,7 +16,8 @@
       "name": "@any-agent/core",
       "version": "0.0.1",
       "dependencies": {
-        "zod": "4.1.12",
+        "ai": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",

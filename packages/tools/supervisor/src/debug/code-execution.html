@@ -176,6 +176,7 @@
 					this.isEmptyContent = false;
 
 					const requestBody = {
+						tool: 'code_execution',
 						sessionId: this.sessionId,
 						language: this.language,
 						code: this.code,
@@ -187,7 +188,7 @@
 					this.rawInput = requestBody;
 
 					try {
-						const response = await fetch('/run', {
+						const response = await fetch('/tools/execute', {
 							method: 'POST',
 							headers: { 'Content-Type': 'application/json' },
 							body: JSON.stringify(requestBody)

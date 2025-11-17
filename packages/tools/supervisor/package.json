@@ -9,6 +9,7 @@
     "restart": "bun run stop && bun run start",
     "dev": "bun run src/index.ts",
     "test": "bun test",
+    "tsc": "tsc",
     "test:integration": "bun test tests/integration",
     "test:watch": "bun test --watch"
   },

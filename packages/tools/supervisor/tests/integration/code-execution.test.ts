@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { RunResponseSchema } from "@any-agent/core/schemas";
+import { ToolResponseSchema } from "@any-agent/core/schemas";
 import { getJobWorkDir } from "@any-agent/core/storage";
 import path from "path";
 
@@ -16,17 +16,17 @@ async function executeCode(params: {
 	filename: string;
 	timeout?: number;
 }) {
-	const response = await fetch(`${ENDPOINT}/run`, {
+	const response = await fetch(`${ENDPOINT}/tools/execute`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(params),
+		body: JSON.stringify({ ...params, tool: 'code_execution' }),
 	});
 
 	expect(response.ok).toBe(true);
 	const data = await response.json();
 
 	// Validate response schema
-	const validated = RunResponseSchema.parse(data);
+	const validated = ToolResponseSchema.parse(data);
 	return validated;
 }
 
@@ -392,11 +392,12 @@ echo "file content" > data.txt`;
 	describe("Timeout", () => {
 		test("execution times out after specified duration", async () => {
 			const sessionId = getSessionId();
-			const response = await fetch(`${ENDPOINT}/run`, {
+			const response = await fetch(`${ENDPOINT}/tools/execute`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					sessionId,
+					tool: "code_execution",
 					language: "python",
 					code: "import time\ntime.sleep(2)",
 					filename: "test.py",
@@ -406,7 +407,7 @@ echo "file content" > data.txt`;
 
 			expect(response.ok).toBe(true);
 			const data = await response.json();
-			const validated = RunResponseSchema.parse(data);
+			const validated = ToolResponseSchema.parse(data);
 
 			// Should have exit code -1 for timeout
 			expect(validated.exitCode).toBe(-1);
@@ -421,11 +422,12 @@ echo "file content" > data.txt`;
 
 		test("execution completes within timeout", async () => {
 			const sessionId = getSessionId();
-			const response = await fetch(`${ENDPOINT}/run`, {
+			const response = await fetch(`${ENDPOINT}/tools/execute`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					sessionId,
+					tool: "code_execution",
 					language: "python",
 					code: 'print("fast execution")',
 					filename: "test.py",
@@ -435,7 +437,7 @@ echo "file content" > data.txt`;
 
 			expect(response.ok).toBe(true);
 			const data = await response.json();
-			const result = RunResponseSchema.parse(data);
+			const result = ToolResponseSchema.parse(data);
 
 			// Should complete successfully
 			expect(result.exitCode).toBe(0);

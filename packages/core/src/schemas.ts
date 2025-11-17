@@ -4,7 +4,8 @@ import { z } from "zod";
 export const ArtifactSchema = z.record(z.string(), z.string()); // { filename: url }
 
 // Base tool request schema
-const BaseToolRequestSchema = z.object({
+export const ToolRequestSchemaAgentParams = z.object({
+	tool: z.string().min(1, "Tool must not be empty"),
 	sessionId: z.string().min(1, "Session ID must not be empty"),
 	timeout: z
 		.number()
@@ -16,16 +17,14 @@ const BaseToolRequestSchema = z.object({
 });
 
 // Code execution tool schemas
-export const CodeExecutionInputSchema = BaseToolRequestSchema.extend({
-	tool: z.literal("code_execution"),
+export const CodeExecutionInputSchema = z.object({
 	language: z.enum(["python", "node", "bun", "bash"]).default("bash"),
 	code: z.string().min(1, "Code must not be empty"),
 	filename: z.string().default("script.js"),
 });
 
 // Document converter tool schemas
-export const DocumentConverterInputSchema = BaseToolRequestSchema.extend({
-	tool: z.literal("document_converter"),
+export const DocumentConverterInputSchema = z.object({
 	fileContent: z.string().min(1, "File content must not be empty (base64 encoded)"),
 	filename: z.string().min(1, "Filename must not be empty"),
 	conversionScript: z
@@ -35,7 +34,7 @@ export const DocumentConverterInputSchema = BaseToolRequestSchema.extend({
 });
 
 // Union of all tool input schemas (add more as tools are created)
-export const ToolRequestSchema = z.discriminatedUnion("tool", [
+export const ToolRequestSchema = z.union([
 	CodeExecutionInputSchema,
 	DocumentConverterInputSchema,
 ]);
@@ -56,16 +55,9 @@ export const ToolResponseSchema = z.object({
 	stderrTrimmed: z.boolean().optional().describe("Indicates if stderr was trimmed (only present if stderr is trimmed)"),
 });
 
-// Legacy schemas for backward compatibility
-export const RunRequestSchema = CodeExecutionInputSchema.omit({ tool: true });
-export const RunResponseSchema = ToolResponseSchema.omit({ tool: true });
-
 // Types
 export type CodeExecutionInput = z.infer<typeof CodeExecutionInputSchema>;
 export type DocumentConverterInput = z.infer<typeof DocumentConverterInputSchema>;
 export type ToolRequest = z.infer<typeof ToolRequestSchema>;
 export type ToolResponse = z.infer<typeof ToolResponseSchema>;
 
-// Legacy types for backward compatibility
-export type RunRequest = z.infer<typeof RunRequestSchema>;
-export type RunResponse = z.infer<typeof RunResponseSchema>;
