@@ -1,4 +1,5 @@
 import type { ToolRequest } from "@any-agent/core/schemas";
+import type { ZodSchema } from "zod";
 
 /**
  * Context information passed to tool handlers
@@ -21,6 +22,31 @@ export interface ToolExecutionResult {
 }
 
 /**
+ * Metadata describing a tool for LLM consumption
+ */
+export interface ToolMetadata {
+	/**
+	 * The unique tool type identifier (e.g., "code_execution")
+	 */
+	toolType: string;
+
+	/**
+	 * Human-readable name of the tool
+	 */
+	name: string;
+
+	/**
+	 * Description of what the tool does and when to use it
+	 */
+	description: string;
+
+	/**
+	 * Zod schema for the tool's input parameters
+	 */
+	inputSchema: ZodSchema;
+}
+
+/**
  * Base interface for all tool handlers
  */
 export interface ToolHandler<TInput extends ToolRequest = ToolRequest> {
@@ -28,6 +54,21 @@ export interface ToolHandler<TInput extends ToolRequest = ToolRequest> {
 	 * The tool type this handler processes
 	 */
 	readonly toolType: string;
+
+	/**
+	 * Human-readable name of the tool
+	 */
+	readonly name: string;
+
+	/**
+	 * Description of what the tool does and when to use it
+	 */
+	readonly description: string;
+
+	/**
+	 * Zod schema for validating tool input
+	 */
+	readonly inputSchema: ZodSchema<TInput>;
 
 	/**
 	 * Execute the tool with the given input and context
@@ -67,5 +108,17 @@ export class ToolRegistry {
 	 */
 	getToolTypes(): string[] {
 		return Array.from(this.handlers.keys());
+	}
+
+	/**
+	 * Get metadata for all registered tools
+	 */
+	getTools(): ToolMetadata[] {
+		return Array.from(this.handlers.values()).map((handler) => ({
+			toolType: handler.toolType,
+			name: handler.name,
+			description: handler.description,
+			inputSchema: handler.inputSchema,
+		}));
 	}
 }

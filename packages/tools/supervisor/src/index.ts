@@ -74,6 +74,48 @@ if (process.env.DEBUG_UI === "true") {
 	console.log("  - Document converter: /debug/document-converter");
 }
 
+// GET /tools - List all available tools with their metadata
+fastify.get("/tools", async (request, reply) => {
+	const tools = toolRegistry.getTools().map((tool) => {
+		// Extract parameter information from the Zod schema
+		const schema = tool.inputSchema as any;
+		const shape = schema.shape || {};
+		const parameters: Record<string, any> = {};
+
+		for (const [key, value] of Object.entries(shape)) {
+			const zodField = value as any;
+			const fieldDef = zodField._def || zodField.def || {};
+
+			parameters[key] = {
+				type: fieldDef.type || zodField.type || "unknown",
+				required: !zodField.isOptional?.(),
+				...(zodField.description && { description: zodField.description }),
+			};
+
+			// Add additional details based on type
+			if (fieldDef.type === "literal" && fieldDef.values) {
+				parameters[key].value = fieldDef.values[0];
+			} else if (fieldDef.type === "enum" || zodField.options) {
+				parameters[key].options = zodField.options;
+			} else if (fieldDef.type === "default") {
+				// For defaults, extract the actual default value
+				const defaultVal = fieldDef.defaultValue;
+				parameters[key].default = typeof defaultVal === "function" ? defaultVal() : defaultVal;
+				parameters[key].type = fieldDef.innerType?.type || fieldDef.innerType?._def?.type;
+			}
+		}
+
+		return {
+			toolType: tool.toolType,
+			name: tool.name,
+			description: tool.description,
+			parameters,
+		};
+	});
+
+	reply.send({ tools });
+});
+
 // POST /tools/execute - Execute any registered tool
 fastify.post("/tools/execute", async (request, reply) => {
 	// Validate request body

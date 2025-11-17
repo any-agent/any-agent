@@ -4,7 +4,7 @@ import type {
 	ToolExecutionContext,
 	ToolExecutionResult,
 } from "./tool-handler.js";
-import type { CodeExecutionInput } from "@any-agent/core/schemas";
+import { CodeExecutionInputSchema, type CodeExecutionInput } from "@any-agent/core/schemas";
 import { writeWorkspaceFile } from "@any-agent/core/storage";
 
 /**
@@ -12,6 +12,9 @@ import { writeWorkspaceFile } from "@any-agent/core/storage";
  */
 export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 	readonly toolType = "code_execution";
+	readonly name = "Code Execution";
+	readonly description = "Execute code in an isolated containerized environment. Supports Python 3, Node.js, Bun, and Bash. Many standard linux commandline tools are also available. The code runs in a secure sandbox with network disabled, memory limits (512MB), and process limits. Output files, stdout, and stderr are captured and made available as artifacts.";
+	readonly inputSchema = CodeExecutionInputSchema;
 
 	constructor(private docker: Docker) { }
 

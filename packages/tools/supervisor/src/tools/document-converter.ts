@@ -4,7 +4,7 @@ import type {
 	ToolExecutionContext,
 	ToolExecutionResult,
 } from "./tool-handler.js";
-import type { DocumentConverterInput } from "@any-agent/core/schemas";
+import { DocumentConverterInputSchema, type DocumentConverterInput } from "@any-agent/core/schemas";
 import { writeWorkspaceFile } from "@any-agent/core/storage";
 
 /**
@@ -13,6 +13,9 @@ import { writeWorkspaceFile } from "@any-agent/core/storage";
  */
 export class DocumentConverterTool implements ToolHandler<DocumentConverterInput> {
 	readonly toolType = "document_converter";
+	readonly name = "Document Converter";
+	readonly description = "Convert documents to pdf, markdown or other formats using pandoc, pdf2html, libreoffice in an isolated container. Supports PDF, DOCX, and other formats that those tools can handle. The file content must be base64-encoded and you provide a custom conversion script (bash commands). Output files, stdout, and stderr are captured as artifacts.";
+	readonly inputSchema = DocumentConverterInputSchema;
 
 	constructor(private docker: Docker) { }
 
