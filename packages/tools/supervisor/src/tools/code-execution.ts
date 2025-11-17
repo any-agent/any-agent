@@ -114,7 +114,29 @@ export class CodeExecutionTool implements ToolHandler<CodeExecutionInput> {
 		const stderrContent = Buffer.concat(stderrChunks).toString("utf-8");
 		await writeWorkspaceFile(workDir, "stderr", stderrContent);
 
-		return { exitCode, inputFiles };
+		// Trim stdout/stderr if they exceed 10KB and include in result
+		const MAX_OUTPUT_SIZE = 10 * 1024; // 10KB
+		const result: ToolExecutionResult = { exitCode, inputFiles };
+
+		if (stdoutContent.length > 0) {
+			if (stdoutContent.length > MAX_OUTPUT_SIZE) {
+				result.stdout = stdoutContent.slice(0, MAX_OUTPUT_SIZE);
+				result.stdoutTrimmed = true;
+			} else {
+				result.stdout = stdoutContent;
+			}
+		}
+
+		if (stderrContent.length > 0) {
+			if (stderrContent.length > MAX_OUTPUT_SIZE) {
+				result.stderr = stderrContent.slice(0, MAX_OUTPUT_SIZE);
+				result.stderrTrimmed = true;
+			} else {
+				result.stderr = stderrContent;
+			}
+		}
+
+		return result;
 	}
 
 	/**

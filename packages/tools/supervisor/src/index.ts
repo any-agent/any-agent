@@ -183,6 +183,10 @@ fastify.post("/tools/execute", async (request, reply) => {
 				inputs: inputArtifacts,
 				outputs: outputArtifacts,
 			},
+			...(result.stdout && { stdout: result.stdout }),
+			...(result.stdoutTrimmed && { stdoutTrimmed: result.stdoutTrimmed }),
+			...(result.stderr && { stderr: result.stderr }),
+			...(result.stderrTrimmed && { stderrTrimmed: result.stderrTrimmed }),
 		};
 
 		reply.send(response);
@@ -294,6 +298,10 @@ fastify.post("/run", async (request, reply) => {
 				inputs: inputArtifacts,
 				outputs: outputArtifacts,
 			},
+			...(result.stdout && { stdout: result.stdout }),
+			...(result.stdoutTrimmed && { stdoutTrimmed: result.stdoutTrimmed }),
+			...(result.stderr && { stderr: result.stderr }),
+			...(result.stderrTrimmed && { stderrTrimmed: result.stderrTrimmed }),
 		};
 
 		reply.send(response);

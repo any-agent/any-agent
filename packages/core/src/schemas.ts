@@ -50,6 +50,10 @@ export const ToolResponseSchema = z.object({
 		inputs: ArtifactSchema,
 		outputs: ArtifactSchema,
 	}),
+	stdout: z.string().optional().describe("Standard output (omitted if empty, trimmed if > 10KB)"),
+	stdoutTrimmed: z.boolean().optional().describe("Indicates if stdout was trimmed (only present if stdout is trimmed)"),
+	stderr: z.string().optional().describe("Standard error (omitted if empty, trimmed if > 10KB)"),
+	stderrTrimmed: z.boolean().optional().describe("Indicates if stderr was trimmed (only present if stderr is trimmed)"),
 });
 
 // Legacy schemas for backward compatibility

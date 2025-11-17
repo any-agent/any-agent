@@ -19,6 +19,10 @@ export interface ToolExecutionContext {
 export interface ToolExecutionResult {
 	exitCode: number;
 	inputFiles: Set<string>;
+	stdout?: string;
+	stdoutTrimmed?: boolean;
+	stderr?: string;
+	stderrTrimmed?: boolean;
 }
 
 /**
